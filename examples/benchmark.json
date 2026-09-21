@@ -1,0 +1,132 @@
+{
+  "schema_version": "lynceus.benchmark/1.0",
+  "frozen": true,
+  "policy_compatible": true,
+  "reference_provenance": "synthetic_fixture",
+  "images": [
+    {
+      "id": "first",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "scene_id": "one",
+      "near_duplicate_group": "one",
+      "split": "evaluation",
+      "domain": "fixture",
+      "size": [
+        100,
+        100
+      ],
+      "references": [
+        {
+          "id": "r1",
+          "bbox_xyxy": [
+            0,
+            0,
+            10,
+            10
+          ],
+          "permitted_labels": [
+            "cup"
+          ],
+          "eligible": true
+        },
+        {
+          "id": "r2",
+          "bbox_xyxy": [
+            20,
+            20,
+            30,
+            30
+          ],
+          "permitted_labels": [
+            "cup"
+          ],
+          "eligible": true
+        }
+      ],
+      "run_status": "completed",
+      "predictions": [
+        {
+          "id": "p1",
+          "bbox_xyxy": [
+            0,
+            0,
+            10,
+            10
+          ],
+          "label": "cup",
+          "kind": "instance",
+          "status": "accepted",
+          "scene_layer": "physical"
+        },
+        {
+          "id": "p2",
+          "bbox_xyxy": [
+            0,
+            0,
+            10,
+            10
+          ],
+          "label": "cup",
+          "kind": "instance",
+          "status": "accepted",
+          "scene_layer": "physical"
+        },
+        {
+          "id": "p3",
+          "bbox_xyxy": [
+            20,
+            20,
+            30,
+            30
+          ],
+          "label": "unknown_object",
+          "kind": "instance",
+          "status": "uncertain",
+          "scene_layer": "physical"
+        },
+        {
+          "id": "p4",
+          "bbox_xyxy": [
+            0,
+            0,
+            50,
+            50
+          ],
+          "label": "cup",
+          "kind": "group",
+          "status": "uncertain",
+          "scene_layer": "physical"
+        }
+      ]
+    },
+    {
+      "id": "missing",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "scene_id": "two",
+      "near_duplicate_group": "two",
+      "split": "evaluation",
+      "domain": "fixture",
+      "size": [
+        100,
+        100
+      ],
+      "references": [
+        {
+          "id": "r1",
+          "bbox_xyxy": [
+            0,
+            0,
+            10,
+            10
+          ],
+          "permitted_labels": [
+            "cup"
+          ],
+          "eligible": true
+        }
+      ],
+      "run_status": "missing",
+      "predictions": []
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lynceus"
+version = "0.1.0"
+description = "Unqualified offline object-discovery foundation"
+requires-python = ">=3.11"
+dependencies = ["pydantic==2.11.7", "Pillow==9.5.0", "numpy==2.2.6", "scipy==1.15.2"]
+
+[project.optional-dependencies]
+model = ["torch==2.6.0", "transformers==5.17.0"]
+test = ["pytest==8.4.2"]
+
+[project.scripts]
+lynceus = "lynceus.cli:main"
+
+[tool.setuptools.package-data]
+lynceus = ["data/*.json"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

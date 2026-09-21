@@ -1,0 +1,11 @@
+[core]
+project_name = "Lynceus"
+user_name = "Genadiy"
+communication_language = "English"
+document_output_language = "English"
+output_folder = "_bmad-output"
+
+[modules.bmm]
+implementation_artifacts = "_bmad-output/implementation-artifacts"
+planning_artifacts = "_bmad-output/specs"
+project_knowledge = "docs"

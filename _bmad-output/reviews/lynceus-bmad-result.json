@@ -1,0 +1,31 @@
+{
+  "status": "complete",
+  "files": [
+    "README.md",
+    "_bmad-output/reviews/lynceus-bmad-result.json",
+    "_bmad-output/reviews/lynceus-spec-review.md",
+    "_bmad-output/reviews/lynceus-static-checks.json",
+    "_bmad-output/sources/lynceus-intent.md",
+    "_bmad-output/specs/spec-lynceus/.memlog.md",
+    "_bmad-output/specs/spec-lynceus/SPEC.md",
+    "_bmad-output/specs/spec-lynceus/annotation-policy.md",
+    "_bmad-output/specs/spec-lynceus/architecture.md",
+    "_bmad-output/specs/spec-lynceus/delivery-plan.md",
+    "_bmad-output/specs/spec-lynceus/evaluation.md",
+    "_bmad-output/specs/spec-lynceus/failure-modes.md",
+    "_bmad-output/specs/spec-lynceus/output-contract.md",
+    "_bmad/LICENSE",
+    "_bmad/README.md",
+    "_bmad/config.toml",
+    "_bmad/provenance.json",
+    "_bmad/scripts/config_utils.py",
+    "_bmad/scripts/memlog.py",
+    "_bmad/scripts/resolve_config.py",
+    "_bmad/scripts/resolve_customization.py",
+    "_bmad/skills/bmad-spec/SKILL.md",
+    "_bmad/skills/bmad-spec/assets/headless-schemas.md",
+    "_bmad/skills/bmad-spec/assets/spec-template.md",
+    "_bmad/skills/bmad-spec/assets/stories-schema.md",
+    "_bmad/skills/bmad-spec/customize.toml"
+  ]
+}

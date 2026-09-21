@@ -1,0 +1,23 @@
+{
+  "test": "random-initialized tiny OWLv2 API smoke",
+  "pretrained_weights": false,
+  "network": "socket connections denied",
+  "device": "cpu",
+  "objectness_logits_shape": [
+    1,
+    4
+  ],
+  "pred_boxes_shape": [
+    1,
+    4,
+    4
+  ],
+  "class_logits_shape": [
+    1,
+    4,
+    2
+  ],
+  "finite": true,
+  "forward_seconds": 0.08503974892664701,
+  "accuracy_claim": "none; random weights only validate local API compatibility, not trained-model feasibility"
+}

@@ -1,0 +1,62 @@
+# Local environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Generated project data and downloaded checkpoints
+/.chkpts/
+/out/
+
+# Build and package artifacts
+build/
+dist/
+*.egg-info/
+*.deb
+*.rpm
+*.whl
+*.so
+*.dylib
+*.dll
+*.exe
+*.o
+*.a
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+
+# Model weights and serialized binary data
+*.bin
+*.ckpt
+*.onnx
+*.pt
+*.pth
+*.safetensors
+*.pkl
+*.pickle
+*.npy
+*.npz
+
+# Binary media
+*.bmp
+*.gif
+*.ico
+*.jpeg
+*.jpg
+*.png
+*.tif
+*.tiff
+*.webp
+*.mp3
+*.mp4
+*.mov
+*.wav

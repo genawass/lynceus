@@ -1,0 +1,109 @@
+{
+  "method": "BMAD",
+  "source_install_version": "6.11.0",
+  "source_install_date": "2026-08-22",
+  "scope": "Selected bmad-spec and bmad-build skills and shared helpers; not a full BMAD installation",
+  "upstream": "https://github.com/bmad-code-org/BMAD-METHOD",
+  "files": [
+    {
+      "file": "_bmad/scripts/memlog.py",
+      "sha256": "3b00f82ca33dc4227f715123b939514ee35c4f9c71150c894c3d8185df1b48df"
+    },
+    {
+      "file": "_bmad/scripts/resolve_config.py",
+      "sha256": "fc78866fd42862d486d4346d2b35705f916a19e6c07bb474f8add25c71734a8e"
+    },
+    {
+      "file": "_bmad/scripts/resolve_customization.py",
+      "sha256": "9b5124e0b781823a015a19d6cf5db52bbc34b6bab41c036fd1b3d464c2a137cd"
+    },
+    {
+      "file": "_bmad/scripts/config_utils.py",
+      "sha256": "48afe2bc18a29201e343cce3703be1e70df9c83ee74eeb68e57ef8ef42e8c651"
+    },
+    {
+      "file": "_bmad/skills/bmad-spec/SKILL.md",
+      "sha256": "5b5680dbf01dbfc5b4a5485e70f20ea48ac21a1d6137c4ea2ff704262dcc45d2"
+    },
+    {
+      "file": "_bmad/skills/bmad-spec/customize.toml",
+      "sha256": "a89e0f53f9b6386c281dd0158a21801a6b16f122085fd68b0220cd403c18f830"
+    },
+    {
+      "file": "_bmad/skills/bmad-spec/assets/spec-template.md",
+      "sha256": "4b3a032c045fdd0903933446fc07f93e879997f28a0294ed4344da71192b20ee"
+    },
+    {
+      "file": "_bmad/skills/bmad-spec/assets/headless-schemas.md",
+      "sha256": "83afb3614716db2347d83586a67b9c524492dd50db5282436ccb35c99fb5f08a"
+    },
+    {
+      "file": "_bmad/skills/bmad-spec/assets/stories-schema.md",
+      "sha256": "4f8137c00e2710288354a4466d1cfb90704f4b2a04bd3b63924218fd589cc6a9"
+    },
+    {
+      "file": "_bmad/scripts/render_skill.py",
+      "sha256": "8496d0d8b449d64c21b42a9aab3b13fc8a813a430c0695ffd84ad75bb1da7942"
+    },
+    {
+      "file": "_bmad/skills/bmad-build/spec-template.md",
+      "sha256": "68d0e3b9acaa0c22ab3b0dd1dbce9d8ef9b4d16637ed5e6fbd5244528732943e"
+    },
+    {
+      "file": "_bmad/skills/bmad-build/step-01-clarify-and-route.md",
+      "sha256": "0a3afcde2b1d4475250896f132fd8839cf442b3364ebfbeeace5a489042c7c7f"
+    },
+    {
+      "file": "_bmad/skills/bmad-build/SKILL.md",
+      "sha256": "bce4778d8d275095ca1836733337163c1bf11a5a62e6585b951de458a5ac2c8e"
+    },
+    {
+      "file": "_bmad/skills/bmad-build/step-02-plan.md",
+      "sha256": "d90db50ca7a679dd42f7d1587a909d0579f24480b116d6ed82b4c7d4fe9bea66"
+    },
+    {
+      "file": "_bmad/skills/bmad-build/compile-epic-context.md",
+      "sha256": "6793b15ae85766cee529e6b349e45f2c6ec9e3212019611c29e8c77b4dc4b924"
+    },
+    {
+      "file": "_bmad/skills/bmad-build/customize.toml",
+      "sha256": "68a0134f3f9e7f4a7b077aa2dcca1c68f208701d3487482e84afbee8717efec6"
+    },
+    {
+      "file": "_bmad/skills/bmad-build/step-04-review.md",
+      "sha256": "bcf300e2faaf413afe1a25498284baabba09681bca089e615530d0b9dc5cee72"
+    },
+    {
+      "file": "_bmad/skills/bmad-build/workflow.md",
+      "sha256": "481ff00ef349a9c7845feca02bbfd5722b1e318ccabac858355da6c90c2d8a39"
+    },
+    {
+      "file": "_bmad/skills/bmad-build/step-oneshot.md",
+      "sha256": "e75505130a2fcc49cd71dfb36c92e76255d39fdfe8d4f735c7c9276e2917cb8a"
+    },
+    {
+      "file": "_bmad/skills/bmad-build/step-03-implement.md",
+      "sha256": "3b77ca64380b2989016191f488311ff392df0ebf4f641b9898d02b01767a646f"
+    },
+    {
+      "file": "_bmad/skills/bmad-build/step-05-present.md",
+      "sha256": "81e80f3fd38f8e3049afe9daf41783b86b00ac22544f7f36bd430496a12d8e46"
+    },
+    {
+      "file": "_bmad/skills/bmad-build/sync-sprint-status.md",
+      "sha256": "6c9e2ec17245d2dcb796bd9a36997371a20db8e579a2f803d16064e3bc36c40b"
+    },
+    {
+      "file": "_bmad/skills/bmad-build/review-prompts/verification-gap.md",
+      "sha256": "11b6bbbd4e3426a25cca81229c98971e5f20ce99638940c47c9c1484011b457a"
+    },
+    {
+      "file": "_bmad/skills/bmad-build/review-prompts/edge-case-hunter.md",
+      "sha256": "4ccb3599ed1b8cc54876b304dc567d1b4e3e0ec5c1add34df9a2445224ac77af"
+    },
+    {
+      "file": "_bmad/skills/bmad-build/references/deletion-check.md",
+      "sha256": "0f1f124e4e957147e89164a272b10bedc694ad0d9ad2618c8610ac74ee9cb0da"
+    }
+  ]
+}

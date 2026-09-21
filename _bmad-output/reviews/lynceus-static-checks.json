@@ -1,0 +1,10 @@
+{
+  "status": "pass",
+  "capabilities": 10,
+  "companions": 6,
+  "work_packages": 15,
+  "json_examples_parsed": 1,
+  "broken_links": 0,
+  "copied_bmad_files_verified": 9,
+  "scope": "Static specification checks only; annotation implementation and model evaluation have not run."
+}

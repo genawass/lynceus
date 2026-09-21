@@ -1,0 +1,19 @@
+{
+ "id": "owlv2-aerial-baseline-v1",
+ "version": "1.0",
+ "adapter": "owlv2",
+ "ontology": "aerial-traffic-strict-v1",
+ "derivation": "The ontology's canonical names, unchanged. This is the identity vocabulary: it exists so that the prompt path is explicit and recorded rather than implicit in the adapter, and so a calibrated vocabulary has something to be compared against. It is not calibrated and claims no fitness.",
+ "fitted_on": null,
+ "prompts": {
+  "person": "person",
+  "vehicle": "vehicle",
+  "car": "car",
+  "van": "van",
+  "truck": "truck",
+  "bus": "bus",
+  "motorcycle": "motorcycle",
+  "bicycle": "bicycle",
+  "tricycle": "tricycle"
+ }
+}

@@ -1,0 +1,80 @@
+{
+  "generation_hash": "4b6dc41a55886adb9577",
+  "inputs": {
+    "project_root": "/home/genadiy/dev/lynceus",
+    "renderer_sha256": "8496d0d8b449d64c21b42a9aab3b13fc8a813a430c0695ffd84ad75bb1da7942",
+    "resolved_values": {
+      "config.core.communication_language": "English",
+      "config.core.document_output_language": "English",
+      "config.modules.bmm.implementation_artifacts": "_bmad-output/implementation-artifacts",
+      "config.modules.bmm.planning_artifacts": "_bmad-output/specs",
+      "customization.workflow.activation_steps_append": [],
+      "customization.workflow.activation_steps_prepend": [],
+      "customization.workflow.implementation_handoff": "Launch a subagent with no prior conversation context, with this prompt:\n\n> Read {spec_file} fully and implement it — the spec is the sole source of truth. Load every file listed in its frontmatter `context:` before you start.\n>\n> When done, report what you changed, how you verified it, and anything left incomplete or risky.\n",
+      "customization.workflow.on_complete": "",
+      "customization.workflow.oneshot_review_layers": [
+        {
+          "id": "blind-hunter",
+          "instruction": "Launch a context-free subagent with this prompt:\n\nConduct a review of CONTENT.\nLook for what's missing, not only what's wrong.\nFind at least ten issues to fix or improve.\nOutput a Markdown list of findings only — no severity, priority, or ranking.\nIf the content is empty, stop and say so.\nIf you have zero findings, re-check and keep thinking; do not stop with an empty list.\n\nCONTENT:\nThe changed files in the current worktree. Inspect them directly before reviewing.\n\nDo not invoke any skill. Return only the review result.\n\n",
+          "name": "Blind Hunter"
+        }
+      ],
+      "customization.workflow.open_spec": "",
+      "customization.workflow.persistent_facts": [
+        "file:{project-root}/**/project-context.md"
+      ],
+      "customization.workflow.review_layers": [
+        {
+          "id": "blind-hunter",
+          "instruction": "Launch a context-free subagent with this prompt:\n\nConduct a review of CONTENT.\nLook for what's missing, not only what's wrong.\nFind at least ten issues to fix or improve.\nOutput a Markdown list of findings only — no severity, priority, or ranking.\nIf the content is empty, stop and say so.\nIf you have zero findings, re-check and keep thinking; do not stop with an empty list.\n\nCONTENT:\n{diff_output}\n\nDo not invoke any skill. Return only the review result.\n\n",
+          "name": "Blind Hunter"
+        },
+        {
+          "id": "edge-case-hunter",
+          "instruction": "Launch a context-free subagent with this prompt:\n\nRead `{skill-root}/review-prompts/edge-case-hunter.md` completely and follow it as your review instructions.\n\nReview content:\n\n{diff_output}\n\nDo not invoke any skill. If the instruction file is unreadable, report that exact failure and stop. Return only the review result.\n\n",
+          "name": "Edge Case Hunter"
+        },
+        {
+          "id": "verification-gap",
+          "instruction": "Launch a context-free subagent with this prompt:\n\nRead `{skill-root}/review-prompts/verification-gap.md` completely and follow it as your review instructions.\n\nReview content:\n\n{diff_output}\n\nDo not invoke any skill. If the instruction file is unreadable, report that exact failure and stop. Return only the review result.\n\n",
+          "name": "Verification Gap Reviewer"
+        }
+      ]
+    },
+    "source_sha256": {
+      "compile-epic-context.md": "6793b15ae85766cee529e6b349e45f2c6ec9e3212019611c29e8c77b4dc4b924",
+      "references/deletion-check.md": "0f1f124e4e957147e89164a272b10bedc694ad0d9ad2618c8610ac74ee9cb0da",
+      "review-prompts/edge-case-hunter.md": "4ccb3599ed1b8cc54876b304dc567d1b4e3e0ec5c1add34df9a2445224ac77af",
+      "review-prompts/verification-gap.md": "11b6bbbd4e3426a25cca81229c98971e5f20ce99638940c47c9c1484011b457a",
+      "spec-template.md": "68d0e3b9acaa0c22ab3b0dd1dbce9d8ef9b4d16637ed5e6fbd5244528732943e",
+      "step-01-clarify-and-route.md": "0a3afcde2b1d4475250896f132fd8839cf442b3364ebfbeeace5a489042c7c7f",
+      "step-02-plan.md": "d90db50ca7a679dd42f7d1587a909d0579f24480b116d6ed82b4c7d4fe9bea66",
+      "step-03-implement.md": "3b77ca64380b2989016191f488311ff392df0ebf4f641b9898d02b01767a646f",
+      "step-04-review.md": "bcf300e2faaf413afe1a25498284baabba09681bca089e615530d0b9dc5cee72",
+      "step-05-present.md": "81e80f3fd38f8e3049afe9daf41783b86b00ac22544f7f36bd430496a12d8e46",
+      "step-oneshot.md": "e75505130a2fcc49cd71dfb36c92e76255d39fdfe8d4f735c7c9276e2917cb8a",
+      "sync-sprint-status.md": "6c9e2ec17245d2dcb796bd9a36997371a20db8e579a2f803d16064e3bc36c40b",
+      "workflow.md": "481ff00ef349a9c7845feca02bbfd5722b1e318ccabac858355da6c90c2d8a39"
+    }
+  },
+  "outputs": {
+    "compile-epic-context.md": "6793b15ae85766cee529e6b349e45f2c6ec9e3212019611c29e8c77b4dc4b924",
+    "references/deletion-check.md": "0f1f124e4e957147e89164a272b10bedc694ad0d9ad2618c8610ac74ee9cb0da",
+    "review-prompts/edge-case-hunter.md": "4ccb3599ed1b8cc54876b304dc567d1b4e3e0ec5c1add34df9a2445224ac77af",
+    "review-prompts/verification-gap.md": "11b6bbbd4e3426a25cca81229c98971e5f20ce99638940c47c9c1484011b457a",
+    "spec-template.md": "68d0e3b9acaa0c22ab3b0dd1dbce9d8ef9b4d16637ed5e6fbd5244528732943e",
+    "step-01-clarify-and-route.md": "ef9196d6e9299105f82d313f6fda1cb437f85fa34c5b3c5e3bf1102f78a2b68d",
+    "step-02-plan.md": "f910da60be8e4b2970ecf08a014e4a6b21295103256599d77c0d99b0314cb37e",
+    "step-03-implement.md": "db622d1bcf3f4740dce1a3709c5e11affdea234c12bedd252b405249db6ca85c",
+    "step-04-review.md": "03f59f9beee25b76b3b4f3151feee9ac958ead951f89d7b6ceae12654ea70b39",
+    "step-05-present.md": "b4c84d9d679fa736be9559e973f9a220916a63d57528b1a1d5a2953c617541a6",
+    "step-oneshot.md": "dbf65e18c37dba4c3bbcfc9717447dbc180462e4fdc91c8b210e3c32d6e17aac",
+    "sync-sprint-status.md": "fd68bb564beca39010787f3a8c531eed08664491306e55fe0e5348d826cc8d88",
+    "workflow.md": "ec1baa60d57e953af10d404a2bdde07099d951b2d173d16a3e0b781a4a5c67f4"
+  },
+  "project_root": "/home/genadiy/dev/lynceus",
+  "project_slug": "lynceus",
+  "root_hash": "3808e9099586",
+  "schema_version": 1,
+  "skill": "bmad-build"
+}

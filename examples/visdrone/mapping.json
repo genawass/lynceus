@@ -1,0 +1,35 @@
+{
+  "id": "visdrone2019-det-val-broad-v1",
+  "frozen": true,
+  "declared_before_predictions_seen": true,
+  "reference": "VisDrone2019-DET val, original annotation format",
+  "reference_root": "/home/genadiy/data/VisDroneMerged",
+  "ontology": "lynceus-broad-v1",
+  "domain": "aerial_drone",
+  "split": "evaluation",
+  "selection_rule": "sorted(basename for images/val/*.jpg), random.Random(0).sample(files, 10), sorted",
+  "scene_id_rule": "VisDrone sequence prefix before the first underscore; frames of one sequence are near duplicates and share near_duplicate_group",
+  "category_scope": ["person", "bicycle", "car", "vehicle"],
+  "category_scope_reason": "VisDrone2019-DET annotates only the ten listed traffic categories. It labels no buildings, trees, poles, signs, street furniture or carried items, so a correct prediction of such a class is unscoreable rather than a false positive. Predictions labelled outside this scope are excluded from precision denominators and counted separately. unknown_object and entity stay in every denominator so abstention cannot buy precision.",
+  "categories": {
+    "0":  {"name": "ignored",         "eligible": false, "reason": "visdrone_ignored_region"},
+    "1":  {"name": "pedestrian",      "permitted_labels": ["person"]},
+    "2":  {"name": "people",          "permitted_labels": ["person"]},
+    "3":  {"name": "bicycle",         "permitted_labels": ["bicycle", "vehicle"]},
+    "4":  {"name": "car",             "permitted_labels": ["car", "vehicle"]},
+    "5":  {"name": "van",             "permitted_labels": ["car", "vehicle"]},
+    "6":  {"name": "truck",           "permitted_labels": ["vehicle"]},
+    "7":  {"name": "tricycle",        "permitted_labels": ["vehicle"]},
+    "8":  {"name": "awning-tricycle", "permitted_labels": ["vehicle"]},
+    "9":  {"name": "bus",             "permitted_labels": ["vehicle"]},
+    "10": {"name": "motor",           "permitted_labels": ["vehicle"]},
+    "11": {"name": "others",          "eligible": false, "reason": "visdrone_others_category"}
+  },
+  "known_limitations": [
+    "Aerial drone imagery is outside assumption A4 (general photographs). No qualification is inherited or established.",
+    "Ten images and roughly 850 instances are far below the 500-image / 5000-instance panel in evaluation.md. Every gate is inconclusive by construction.",
+    "VisDrone ignored regions contain unannotated objects. Predictions inside them are still scored, so precision is pessimistic there.",
+    "The lynceus-broad-v1 ontology has no truck, bus, van, motorcycle or tricycle class. Those references accept only the broader parent 'vehicle', so label correctness is measured at a coarser granularity than the reference provides.",
+    "The baseline search profile is a single full-image pass with no tiling. Most VisDrone objects fall in the <16px and 16-32px size strata, which is what tiling (WP-06) exists to address. These numbers are the G7 baseline, not the system."
+  ]
+}

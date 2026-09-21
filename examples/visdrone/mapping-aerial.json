@@ -1,0 +1,113 @@
+{
+  "id": "visdrone2019-det-val-aerial-v1",
+  "frozen": true,
+  "declared_before_predictions_seen": true,
+  "reference": "VisDrone2019-DET val, original annotation format",
+  "reference_root": "/home/genadiy/data/VisDroneMerged",
+  "ontology": "aerial-traffic-v1",
+  "domain": "aerial_drone",
+  "split": "evaluation",
+  "selection_rule": "sorted(basename for images/val/*.jpg), random.Random(0).sample(files, 10), sorted",
+  "scene_id_rule": "VisDrone sequence prefix before the first underscore; frames of one sequence are near duplicates and share near_duplicate_group",
+  "category_scope": [
+    "person",
+    "bicycle",
+    "motorcycle",
+    "tricycle",
+    "car",
+    "van",
+    "truck",
+    "bus",
+    "vehicle"
+  ],
+  "category_scope_reason": "VisDrone2019-DET annotates only the ten listed traffic categories. The aerial-traffic-v1 ontology also contains building and tree, which the annotation policy requires for street scenes but VisDrone never labels, so predictions of those classes are unscoreable rather than false positives. Predictions labelled outside this scope leave precision denominators and are counted separately. unknown_object and entity stay in every denominator so abstention cannot buy precision.",
+  "categories": {
+    "0": {
+      "name": "ignored",
+      "eligible": false,
+      "reason": "visdrone_ignored_region"
+    },
+    "1": {
+      "name": "pedestrian",
+      "permitted_labels": [
+        "person"
+      ]
+    },
+    "2": {
+      "name": "people",
+      "permitted_labels": [
+        "person"
+      ]
+    },
+    "3": {
+      "name": "bicycle",
+      "permitted_labels": [
+        "bicycle",
+        "vehicle"
+      ]
+    },
+    "4": {
+      "name": "car",
+      "permitted_labels": [
+        "car",
+        "vehicle"
+      ]
+    },
+    "5": {
+      "name": "van",
+      "permitted_labels": [
+        "van",
+        "vehicle"
+      ]
+    },
+    "6": {
+      "name": "truck",
+      "permitted_labels": [
+        "truck",
+        "vehicle"
+      ]
+    },
+    "7": {
+      "name": "tricycle",
+      "permitted_labels": [
+        "tricycle",
+        "vehicle"
+      ]
+    },
+    "8": {
+      "name": "awning-tricycle",
+      "permitted_labels": [
+        "tricycle",
+        "vehicle"
+      ]
+    },
+    "9": {
+      "name": "bus",
+      "permitted_labels": [
+        "bus",
+        "vehicle"
+      ]
+    },
+    "10": {
+      "name": "motor",
+      "permitted_labels": [
+        "motorcycle",
+        "vehicle"
+      ]
+    },
+    "11": {
+      "name": "others",
+      "eligible": false,
+      "reason": "visdrone_others_category"
+    }
+  },
+  "known_limitations": [
+    "Aerial drone imagery is outside assumption A4 (general photographs). No qualification is inherited or established.",
+    "Ten images and roughly 850 instances are far below the 500-image / 5000-instance panel in evaluation.md. Every gate is inconclusive by construction.",
+    "VisDrone ignored regions contain unannotated objects. Predictions inside them are still scored, so precision is pessimistic there.",
+    "The lynceus-broad-v1 ontology has no truck, bus, van, motorcycle or tricycle class. Those references accept only the broader parent 'vehicle', so label correctness is measured at a coarser granularity than the reference provides.",
+    "The baseline search profile is a single full-image pass with no tiling. Most VisDrone objects fall in the <16px and 16-32px size strata, which is what tiling (WP-06) exists to address. These numbers are the G7 baseline, not the system.",
+    "This mapping is stricter than the broad-ontology one: with 'van', 'truck', 'bus' and 'motorcycle' available, a van labelled 'car' is now an error where previously 'car' was permitted. Classification error under the two ontologies is therefore not a like-for-like comparison; class-neutral recall is."
+  ],
+  "mapping_rule": "Each VisDrone category permits its exact ontology counterpart plus the broader parent 'vehicle'. Uniformly applied, so no category is given a looser target than another. The broad-ontology mapping was necessarily looser because lynceus-broad-v1 has no motorcycle, truck, bus, van or tricycle class and could only permit 'vehicle' for them."
+}

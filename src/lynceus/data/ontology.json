@@ -1,0 +1,195 @@
+{
+  "id": "lynceus-broad-v1",
+  "version": "1.0",
+  "classes": [
+    {
+      "id": "entity",
+      "name": "entity",
+      "synonyms": [],
+      "parent": null,
+      "useful": false
+    },
+    {
+      "id": "unknown_object",
+      "name": "unknown object",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": false
+    },
+    {
+      "id": "person",
+      "name": "person",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "animal",
+      "name": "animal",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "plant",
+      "name": "plant",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "tree",
+      "name": "tree",
+      "synonyms": [],
+      "parent": "plant",
+      "useful": true
+    },
+    {
+      "id": "building",
+      "name": "building",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "vehicle",
+      "name": "vehicle",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "car",
+      "name": "car",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    },
+    {
+      "id": "bicycle",
+      "name": "bicycle",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    },
+    {
+      "id": "furniture",
+      "name": "furniture",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "chair",
+      "name": "chair",
+      "synonyms": [],
+      "parent": "furniture",
+      "useful": true
+    },
+    {
+      "id": "table",
+      "name": "table",
+      "synonyms": [],
+      "parent": "furniture",
+      "useful": true
+    },
+    {
+      "id": "container",
+      "name": "container",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "bottle",
+      "name": "bottle",
+      "synonyms": [],
+      "parent": "container",
+      "useful": true
+    },
+    {
+      "id": "cup",
+      "name": "cup",
+      "synonyms": [],
+      "parent": "container",
+      "useful": true
+    },
+    {
+      "id": "bowl",
+      "name": "bowl",
+      "synonyms": [],
+      "parent": "container",
+      "useful": true
+    },
+    {
+      "id": "clothing",
+      "name": "clothing",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "shirt",
+      "name": "shirt",
+      "synonyms": [],
+      "parent": "clothing",
+      "useful": true
+    },
+    {
+      "id": "shoe",
+      "name": "shoe",
+      "synonyms": [],
+      "parent": "clothing",
+      "useful": true
+    },
+    {
+      "id": "bag",
+      "name": "bag",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "backpack",
+      "name": "backpack",
+      "synonyms": [],
+      "parent": "bag",
+      "useful": true
+    },
+    {
+      "id": "phone",
+      "name": "phone",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "poster",
+      "name": "poster",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "wheel",
+      "name": "wheel",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "hand",
+      "name": "hand",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "stuff",
+      "name": "stuff",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": false
+    }
+  ]
+}

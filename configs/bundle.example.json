@@ -1,0 +1,1 @@
+{"schema_version":"lynceus.bundle/1.0","adapter":"owlv2","qualification":"unqualified","model_dir":"model","dependencies":{"torch":"2.6.0","transformers":"4.49.0"},"assets":[]}

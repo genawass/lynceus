@@ -1,0 +1,99 @@
+{
+  "id": "aerial-traffic-strict-v1",
+  "version": "1.0",
+  "domain": "aerial traffic monitoring; road users only",
+  "derivation": "The VisDrone2019-DET published category list and nothing else. Unlike aerial-traffic-v1 this ontology deliberately omits building and tree: the declared annotation target for this deployment is road users, so static scene structure is outside the convention rather than an object the annotator failed to find. Absence of a building annotation is therefore not evidence about buildings. Declared before measurement under assumption A8.",
+  "excluded_by_convention": [
+    "buildings and architectural structure",
+    "vegetation",
+    "road surface and markings",
+    "street furniture",
+    "anything carried or worn"
+  ],
+  "classes": [
+    {
+      "id": "entity",
+      "name": "entity",
+      "synonyms": [],
+      "parent": null,
+      "useful": false
+    },
+    {
+      "id": "unknown_object",
+      "name": "unknown object",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": false
+    },
+    {
+      "id": "stuff",
+      "name": "stuff",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": false
+    },
+    {
+      "id": "person",
+      "name": "person",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "vehicle",
+      "name": "vehicle",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "car",
+      "name": "car",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    },
+    {
+      "id": "van",
+      "name": "van",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    },
+    {
+      "id": "truck",
+      "name": "truck",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    },
+    {
+      "id": "bus",
+      "name": "bus",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    },
+    {
+      "id": "motorcycle",
+      "name": "motorcycle",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    },
+    {
+      "id": "bicycle",
+      "name": "bicycle",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    },
+    {
+      "id": "tricycle",
+      "name": "tricycle",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    }
+  ]
+}

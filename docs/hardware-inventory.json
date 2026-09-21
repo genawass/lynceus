@@ -1,0 +1,39 @@
+{
+  "captured_date": "2026-09-19",
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.35",
+  "python": "3.12.9",
+  "cpu_model": "11th Gen Intel(R) Core(TM) i7-11700 @ 2.50GHz",
+  "logical_cpus": 16,
+  "memory": {
+    "MemTotal": "32725348 kB",
+    "MemAvailable": "20492488 kB"
+  },
+  "disk": {
+    "total_bytes": 982820896768,
+    "free_bytes": 368258101248
+  },
+  "packages": {
+    "torch": "2.6.0",
+    "transformers": "4.49.0",
+    "pydantic": "2.11.7",
+    "pillow": "9.5.0",
+    "numpy": "2.2.6",
+    "scipy": "1.15.2",
+    "pytest": "8.4.2",
+    "jsonschema": "4.23.0",
+    "setuptools": "75.8.0",
+    "huggingface-hub": "1.7.2"
+  },
+  "cuda_available": false,
+  "gpu_probe": {
+    "exit_code": 9,
+    "output": "NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running."
+  },
+  "huggingface_cached_models": [],
+  "limits": "Environment inventory only; no model inference, VRAM fit, throughput, accuracy, or deployment qualification has been measured.",
+  "transformers_runtime_version": "5.3.0",
+  "transformers_metadata_mismatch": true,
+  "nvidia_device_nodes": [],
+  "nvidia_kernel_module": "580.178.04",
+  "gpu_access_note": "NVIDIA kernel module is visible but no /dev/nvidia* devices are exposed; CUDA is unavailable to this execution environment. This does not establish that the host lacks a physical GPU."
+}

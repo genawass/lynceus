@@ -1,0 +1,106 @@
+{
+  "id": "aerial-traffic-v1",
+  "version": "1.0",
+  "domain": "overhead and oblique aerial imagery of streets and traffic",
+  "derivation": "VisDrone2019-DET published category list, plus building and tree because the annotation policy annotates every distinguishable physical entity and aerial street scenes are dominated by them. Declared before measurement under A8.",
+  "classes": [
+    {
+      "id": "entity",
+      "name": "entity",
+      "synonyms": [],
+      "parent": null,
+      "useful": false
+    },
+    {
+      "id": "unknown_object",
+      "name": "unknown object",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": false
+    },
+    {
+      "id": "stuff",
+      "name": "stuff",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": false
+    },
+    {
+      "id": "person",
+      "name": "person",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "vehicle",
+      "name": "vehicle",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "car",
+      "name": "car",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    },
+    {
+      "id": "van",
+      "name": "van",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    },
+    {
+      "id": "truck",
+      "name": "truck",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    },
+    {
+      "id": "bus",
+      "name": "bus",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    },
+    {
+      "id": "motorcycle",
+      "name": "motorcycle",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    },
+    {
+      "id": "bicycle",
+      "name": "bicycle",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    },
+    {
+      "id": "tricycle",
+      "name": "tricycle",
+      "synonyms": [],
+      "parent": "vehicle",
+      "useful": true
+    },
+    {
+      "id": "building",
+      "name": "building",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    },
+    {
+      "id": "tree",
+      "name": "tree",
+      "synonyms": [],
+      "parent": "entity",
+      "useful": true
+    }
+  ]
+}

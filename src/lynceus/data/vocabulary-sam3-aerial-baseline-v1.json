@@ -1,0 +1,19 @@
+{
+ "id": "sam3-aerial-baseline-v1",
+ "version": "1.0",
+ "adapter": "sam3",
+ "ontology": "aerial-traffic-strict-v1",
+ "derivation": "The ontology's canonical names, unchanged, so the SAM 3 verifier's prompt path is recorded rather than implicit. Separate from the OWLv2 vocabulary because phrasing does not transfer between a CLIP-style text tower and a presence head, even where the two currently hold identical strings.",
+ "fitted_on": null,
+ "prompts": {
+  "person": "person",
+  "vehicle": "vehicle",
+  "car": "car",
+  "van": "van",
+  "truck": "truck",
+  "bus": "bus",
+  "motorcycle": "motorcycle",
+  "bicycle": "bicycle",
+  "tricycle": "tricycle"
+ }
+}
