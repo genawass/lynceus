@@ -1,5 +1,9 @@
 # WeDetect and OWLv2 model-selection note
 
+This note covers the next experiment inside the broader [autolabel quality strategy](autolabel-strategy.md).
+Zero-shot open-vocabulary detection is the portable baseline and unknown-object safety net, not an
+assumption that zero-shot is the final state of the art for a stable, labelable domain.
+
 ## Decision
 
 Use **WeDetect-Uni or WeDetect-Anything as the next class-independent proposal candidate**, retain **OWLv2 as a prompted and alternate objectness source**, and evaluate their union before choosing a production discovery route. Neither model may accept an annotation from its own score. Naming, boundary refinement, independent verification, and uncertainty assessment remain separate stages.

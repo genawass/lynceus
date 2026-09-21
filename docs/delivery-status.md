@@ -803,3 +803,107 @@ different direction: `person` has no useful ancestor in this ontology, so when i
 `bicycle` on a rider the fallback emits `unknown_object` rather than guess. The verifier says those
 are people. Neither model is a reference, so this localises the problem rather than settling it,
 and it points at the ontology rather than at the detector.
+
+## Measured: searching a prompt vocabulary, and two things it taught
+
+Phrasing is configuration, and it was never chosen: both the detector and the SAM 3 verifier built
+their prompts from the ontology's class names verbatim, in separately written lines, with the
+`synonyms` field populated on none of the twelve classes and read by nothing. Vocabularies are now
+their own versioned artifacts, one per model family, and they are searched rather than written.
+
+The search runs on the development panel, caches image features and box predictions -- which no
+phrasing changes -- and re-runs only the text tower and class head per candidate, so a candidate
+costs seconds and the scores are exactly those of a full forward pass. Forty candidate phrasings
+across nine classes, coordinate ascent over the whole vocabulary because the emitted label is
+whichever class wins across all prompts.
+
+### The first objective was wrong, and held-out measurement caught it
+
+The first search maximised class-agnostic localization and gained 32.9% on development. The gain
+replicated on the held-out panel, so it was not noise. It was also worthless:
+
+| | baseline | searched v1 |
+|---|---|---|
+| retained boxes | 2374 | 1797 |
+| its own objective | 0.408 | **0.473** |
+| `unknown_object` emitted | 166 | **278** |
+| `person` emitted | 264 | **138** |
+| useful-label coverage (G4) | 0.480 | **0.386** |
+
+A vocabulary can buy cleaner localization by pushing contested boxes into abstention: fewer boxes,
+better placed, worse named. The measure being optimized rose sixteen per cent while the measure the
+gate scores fell nineteen. Reporting only the development number would have shipped this as a
+one-third improvement. The artifact is kept in
+[`docs/rejected/`](rejected/vocabulary-owlv2-localization-objective.json) rather than deleted,
+because a rejected result is evidence, and the reason is written into the objective's docstring so
+it is not re-derived.
+
+### The corrected objective improves the objective and still costs coverage
+
+The objective now counts what G1 and G4 count: a reference found at IoU 0.75 under a permitted,
+non-abstaining label. That search gained 43% on development.
+
+| held-out panel, 717 references | boxes | localized @.50 | named @.75 | G4 coverage | precision @.50 | objective |
+|---|---|---|---|---|---|---|
+| baseline | 2374 | 631 | 344 | 0.4798 | 0.2658 | 0.2226 |
+| searched v1 (rejected) | 1797 | 595 | 277 | 0.3863 | 0.3311 | 0.2204 |
+| **searched v2** | **1683** | 601 | 334 | **0.4658** | **0.3571** | **0.2783** |
+
+Two things to read here and neither is a clean win.
+
+The development gain was 43% and the held-out gain on the same objective was 25%, so about two
+fifths of the improvement did not survive the move. That gap is what selecting among forty
+candidates on ten images costs, and it is the reason the development score is never the result.
+
+More importantly, **G4 itself went down**, from 0.4798 to 0.4658. The objective rose because it
+includes precision, which improved by a third, on twenty-nine per cent fewer boxes. That is a
+defensible trade -- far fewer false boxes for one and a half points of coverage -- but it is a
+trade, and the gate it is nominally aimed at regressed. So `owlv2-aerial-searched-v2` ships as an
+available artifact and not as the default; adopting it is a product decision about which gate
+matters more, and the evidence for it is here rather than in a headline.
+
+The abstention problem did not recur: `unknown_object` fell from 166 to 130 under v2, against 278
+under v1.
+
+## Measured: the abstention was a category error, and fixing it removes it entirely
+
+Every one of the 166 `unknown_object` labels on the held-out panel came from `person` competing with
+a vehicle class, and the SAM 3 verifier independently called 109 of those abstentions people. Two
+measurements from different directions pointed at the same place, and neither pointed at the
+detector.
+
+The cause was in the naming rule rather than in the ontology's vocabulary or the model's vision. The
+rule compares the two strongest classes on a box and, treating them as competing readings of one
+entity, falls back to the class they jointly support -- or to `unknown_object` where that class is
+not useful. But a person on a motorcycle is two entities the policy counts separately, and a box
+around the rider contains both. The detector scoring `person` and `motorcycle` there was describing
+what is present, not hesitating; the rule resolved a conflict that did not exist and discarded a
+supported class to do it. It is the same error the policy forbids elsewhere, where containment is
+taken to imply identity.
+
+Ontology version 2 declares which classes can co-occur in one region -- a person rides or is carried
+by each vehicle class -- and naming does not fall back on a declared co-occurrence. The class list is
+unchanged, and version 1 remains valid for the runs measured under it.
+
+| held-out panel, 717 references | ontology v1 | v2 | change |
+|---|---|---|---|
+| **`unknown_object` emitted** | **166** | **0** | **-166** |
+| retained boxes | 2374 | 2311 | -63 |
+| class-correct @ IoU 0.50 | 585 | 599 | +14 |
+| class-correct @ IoU 0.75 | 344 | 346 | +2 |
+| G4 useful-label coverage | 0.4798 | 0.4826 | +0.0028 |
+| precision @ IoU 0.50 | 0.2658 | 0.2713 | +0.0055 |
+| recall @ IoU 0.50 | 0.8801 | 0.8745 | -0.0056 |
+
+The rule fired on 121 boxes. Abstention is gone as a category, `person` rose from 264 to 327 and
+`bicycle` from 318 to 347, and precision and useful-label coverage both improved slightly against
+four localized matches lost.
+
+The size of the coverage gain is the more informative number. Removing 166 abstentions added only
+two correctly labelled references at IoU 0.75, because those boxes were mostly small riders whose
+geometry does not clear the tight threshold. The abstention was concealing a localization limit
+rather than causing a naming loss: the objects were found and are now named, and they still do not
+clear 0.75. That returns the question to boundary quality, which is where miss attribution and
+boundary headroom already placed it, and it is a reminder that removing a visible failure is not
+the same as removing the thing it was standing in front of.
+

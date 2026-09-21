@@ -1,0 +1,133 @@
+{
+ "id": "aerial-traffic-strict-v2",
+ "version": "2.0",
+ "domain": "aerial traffic monitoring; road users only",
+ "derivation": "The VisDrone2019-DET published category list and nothing else. Unlike aerial-traffic-v1 this ontology deliberately omits building and tree: the declared annotation target for this deployment is road users, so static scene structure is outside the convention rather than an object the annotator failed to find. Absence of a building annotation is therefore not evidence about buildings. Declared before measurement under assumption A8. Version 2 adds co_occurring: a person rides or is carried by every vehicle class here, so a box around a rider contains two entities rather than one ambiguous entity. Declaring that stops conservative naming from resolving a conflict that does not exist. The class list is unchanged from version 1.",
+ "excluded_by_convention": [
+  "buildings and architectural structure",
+  "vegetation",
+  "road surface and markings",
+  "street furniture",
+  "anything carried or worn"
+ ],
+ "classes": [
+  {
+   "id": "entity",
+   "name": "entity",
+   "synonyms": [],
+   "parent": null,
+   "useful": false
+  },
+  {
+   "id": "unknown_object",
+   "name": "unknown object",
+   "synonyms": [],
+   "parent": "entity",
+   "useful": false
+  },
+  {
+   "id": "stuff",
+   "name": "stuff",
+   "synonyms": [],
+   "parent": "entity",
+   "useful": false
+  },
+  {
+   "id": "person",
+   "name": "person",
+   "synonyms": [],
+   "parent": "entity",
+   "useful": true
+  },
+  {
+   "id": "vehicle",
+   "name": "vehicle",
+   "synonyms": [],
+   "parent": "entity",
+   "useful": true
+  },
+  {
+   "id": "car",
+   "name": "car",
+   "synonyms": [],
+   "parent": "vehicle",
+   "useful": true
+  },
+  {
+   "id": "van",
+   "name": "van",
+   "synonyms": [],
+   "parent": "vehicle",
+   "useful": true
+  },
+  {
+   "id": "truck",
+   "name": "truck",
+   "synonyms": [],
+   "parent": "vehicle",
+   "useful": true
+  },
+  {
+   "id": "bus",
+   "name": "bus",
+   "synonyms": [],
+   "parent": "vehicle",
+   "useful": true
+  },
+  {
+   "id": "motorcycle",
+   "name": "motorcycle",
+   "synonyms": [],
+   "parent": "vehicle",
+   "useful": true
+  },
+  {
+   "id": "bicycle",
+   "name": "bicycle",
+   "synonyms": [],
+   "parent": "vehicle",
+   "useful": true
+  },
+  {
+   "id": "tricycle",
+   "name": "tricycle",
+   "synonyms": [],
+   "parent": "vehicle",
+   "useful": true
+  }
+ ],
+ "co_occurring": [
+  [
+   "person",
+   "bicycle"
+  ],
+  [
+   "person",
+   "motorcycle"
+  ],
+  [
+   "person",
+   "tricycle"
+  ],
+  [
+   "person",
+   "car"
+  ],
+  [
+   "person",
+   "van"
+  ],
+  [
+   "person",
+   "truck"
+  ],
+  [
+   "person",
+   "bus"
+  ],
+  [
+   "person",
+   "vehicle"
+  ]
+ ]
+}

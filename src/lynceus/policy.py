@@ -53,5 +53,21 @@ def common_ancestor(ontology, first, second):
     return next((c for c in up if c in other), None)
 
 
+def co_occurring(ontology, first, second):
+    """Can these two classes both be true of one region?
+
+    Two classes scoring highly on one box are not always competing to describe it. A person on a
+    motorcycle is two entities the policy counts separately, and a box around the rider contains
+    both, so a detector reporting `person` and `motorcycle` there is describing what is present
+    rather than hesitating between readings.
+
+    Only an explicit declaration counts. Inferring co-occurrence from overlap would be the error
+    the policy forbids elsewhere, where containment is taken to imply identity.
+    """
+    declared = ontology.get('co_occurring') or []
+    pair = {first, second}
+    return any(pair == set(entry) for entry in declared)
+
+
 def is_useful(ontology, class_id):
     return next((c['useful'] for c in ontology['classes'] if c['id'] == class_id), False)

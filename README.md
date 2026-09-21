@@ -12,7 +12,7 @@ The specification retains the goal of complete reference annotations while makin
 
 ## Implemented slice
 
-[Runnable offline annotation foundation](_bmad-output/implementation-artifacts/spec-offline-foundation.md): policy/ontology, native schema and cross-field invariants, image normalization, local bundle preflight, a conservative OWLv2 baseline adapter, immutable artifacts with safe resume, and independent-prediction evaluation. Scope and remaining work are tracked in [delivery status](docs/delivery-status.md); measured environment facts are in [feasibility](docs/feasibility.md). The [WeDetect versus OWLv2 decision](docs/model-selection.md) defines the next discovery-model experiment.
+[Runnable offline annotation foundation](_bmad-output/implementation-artifacts/spec-offline-foundation.md): policy/ontology, native schema and cross-field invariants, image normalization, local bundle preflight, a conservative OWLv2 baseline adapter, immutable artifacts with safe resume, and independent-prediction evaluation. Scope and remaining work are tracked in [delivery status](docs/delivery-status.md); measured environment facts are in [feasibility](docs/feasibility.md). The [autolabel quality strategy](docs/autolabel-strategy.md) compares zero-shot, domain-adapted, decoupled, semi-supervised, verifier-cascade, and agentic directions; the [WeDetect versus OWLv2 decision](docs/model-selection.md) defines the next discovery-model experiment within that strategy.
 
 ## Install and run
 

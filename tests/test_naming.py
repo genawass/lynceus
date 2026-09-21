@@ -87,3 +87,48 @@ def test_adapter_without_score_distribution_is_left_alone():
 
 def test_default_ratio_is_declared():
     assert DEFAULT_NAME_RATIO == 0.6
+
+
+def test_co_occurring_classes_do_not_trigger_the_broader_fallback():
+    """A person on a motorcycle is two entities in one box, not one ambiguous entity.
+
+    Falling back here would discard a supported class to resolve a conflict that does not exist,
+    which is the same error as letting containment imply identity.
+    """
+    from lynceus.pipeline import resolve_label
+    from lynceus.policy import load_ontology
+    ontology = load_ontology('aerial-traffic-strict-v2')
+    label, alternatives, reason = resolve_label({'person': 0.6, 'motorcycle': 0.55}, ontology, 0.6)
+    assert label == 'person'
+    assert sorted(alternatives) == ['motorcycle', 'person']
+    assert reason == 'co_occurring_classes_not_competing'
+
+
+def test_exclusive_classes_still_fall_back_to_the_broader_one():
+    from lynceus.pipeline import resolve_label
+    from lynceus.policy import load_ontology
+    ontology = load_ontology('aerial-traffic-strict-v2')
+    # A region cannot be both a car and a van, so the supported claim is what they share.
+    label, _, reason = resolve_label({'car': 0.6, 'van': 0.58}, ontology, 0.6)
+    assert label == 'vehicle'
+    assert reason == 'broader_class_covers_competing_siblings'
+
+
+def test_the_previous_ontology_is_unchanged_and_still_abstains():
+    """Version 1 stays valid for the runs measured under it; this is a new version, not an edit."""
+    from lynceus.pipeline import resolve_label
+    from lynceus.policy import load_ontology
+    label, _, reason = resolve_label({'person': 0.6, 'motorcycle': 0.55},
+                                     load_ontology('aerial-traffic-strict-v1'), 0.6)
+    assert label == 'unknown_object'
+    assert reason == 'no_useful_common_ancestor'
+
+
+def test_co_occurrence_must_be_declared_not_inferred():
+    from lynceus.policy import co_occurring, load_ontology
+    ontology = load_ontology('aerial-traffic-strict-v2')
+    assert co_occurring(ontology, 'person', 'bicycle')
+    assert co_occurring(ontology, 'bicycle', 'person')      # order does not matter
+    # Two vehicles are not declared co-occurring: one region is not both a car and a bus.
+    assert not co_occurring(ontology, 'car', 'bus')
+    assert not co_occurring(ontology, 'car', 'car')

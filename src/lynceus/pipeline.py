@@ -6,7 +6,7 @@ from pathlib import Path
 from io import BytesIO
 from PIL import ImageDraw
 from .images import normalize_image
-from .policy import load_policy,load_ontology,common_ancestor,is_useful
+from .policy import load_policy,load_ontology,common_ancestor,co_occurring,is_useful
 from .contracts import identity,summarize,validate_annotation
 from .artifacts import canonical,digest,write_artifact,verify_artifacts
 from .bundle import preflight,doctor
@@ -286,6 +286,10 @@ def resolve_label(class_scores,ontology,ratio):
     if len(ranked)==1 or top_score<=0 or ranked[1][1]/top_score<ratio:
         return top,[],'specific_label_clear_of_runner_up'
     runner=ranked[1][0]
+    if co_occurring(ontology,top,runner):
+        # Both may be true of this region, so there is no conflict to resolve. Falling back here
+        # would discard a supported class to settle a disagreement that was never one.
+        return top,[top,runner],'co_occurring_classes_not_competing'
     ancestor=common_ancestor(ontology,top,runner)
     if ancestor in (top,runner):
         # One is an ancestor of the other; the broader of the pair is the supported claim.

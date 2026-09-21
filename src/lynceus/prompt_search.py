@@ -22,7 +22,7 @@ import numpy as np
 from .evaluation import iou_matrix, match_matrix
 
 
-def score_vocabulary(views,text_embeds,classes,references,threshold,match_iou=0.5):
+def score_vocabulary(views,text_embeds,classes,references,threshold,match_iou=0.5,label_iou=0.75):
     """Per-class and overall quality of one vocabulary, from cached per-view features.
 
     `views` carries, per view, the cached class-head input, the predicted boxes in source
@@ -38,7 +38,7 @@ def score_vocabulary(views,text_embeds,classes,references,threshold,match_iou=0.
         image=per_image.setdefault(view['image'],[])
         for box,score,winner in zip(view['boxes'][keep],scores[keep],winners[keep]):
             image.append({'bbox_xyxy':list(box),'label':classes[int(winner)],'score':float(score)})
-    totals={'retained':0,'matched':0}
+    totals={'retained':0,'matched':0,'named':0}
     per_class={c:{'retained':0,'matched':0,'references':0} for c in classes}
     for image,refs in references.items():
         boxes=per_image.get(image,[])
@@ -52,13 +52,21 @@ def score_vocabulary(views,text_embeds,classes,references,threshold,match_iou=0.
         values=iou_matrix(boxes,refs)
         pairs=match_matrix(values,values>=match_iou)
         totals['matched']+=len(pairs)
+        # The gates are scored on a correctly labelled reference found at a tight threshold, not on
+        # a box that merely landed somewhere right. Optimising the looser quantity buys localization
+        # by trading away naming, which is measurable here rather than after the fact.
+        permitted=np.array([[boxes[a]['label'] in refs[b]['permitted_labels']
+                             and boxes[a]['label'] not in ('entity','unknown_object')
+                             for b in range(len(refs))] for a in range(len(boxes))])
+        totals['named']+=len(match_matrix(values,(values>=label_iou)&permitted))
         for a,b,_ in pairs:
             label=boxes[a]['label']
             if label in per_class and label in refs[b]['permitted_labels']:
                 per_class[label]['matched']+=1
     eligible=sum(len(v) for v in references.values())
     return {'recall':round(totals['matched']/eligible,6) if eligible else 0.0,
-            'retained':totals['retained'],'matched':totals['matched'],
+            'retained':totals['retained'],'matched':totals['matched'],'named':totals['named'],
+            'useful_label_coverage':round(totals['named']/eligible,6) if eligible else 0.0,
             'precision':round(totals['matched']/totals['retained'],6) if totals['retained'] else 0.0,
             'per_class':per_class}
 
@@ -66,14 +74,19 @@ def score_vocabulary(views,text_embeds,classes,references,threshold,match_iou=0.
 def objective(report,eligible):
     """What the search maximises: correctly labelled references found, per retained box.
 
-    Recall alone would reward a vocabulary that floods the image, and precision alone one that says
-    almost nothing. Their harmonic mean moves only when a change finds more of the reference
-    without paying for it in boxes, which is the trade the gates care about.
+    The counted event is a reference found at the tight threshold under a label its mapping permits,
+    which is what G1 and G4 are scored on. An earlier version of this counted any localized box
+    regardless of label; it improved on held-out data and cost nineteen per cent of useful-label
+    coverage, because a vocabulary can buy localization by pushing contested boxes into abstention.
+    Optimising the loose quantity and hoping the tight one follows does not work.
+
+    Recall alone would reward a vocabulary that floods the image and precision alone one that says
+    almost nothing, so their harmonic mean is taken.
     """
-    recall=report['matched']/eligible if eligible else 0.0
-    precision=report['matched']/report['retained'] if report['retained'] else 0.0
-    if recall<=0 or precision<=0:return 0.0
-    return round(2*recall*precision/(recall+precision),6)
+    coverage=report['named']/eligible if eligible else 0.0
+    precision=report['named']/report['retained'] if report['retained'] else 0.0
+    if coverage<=0 or precision<=0:return 0.0
+    return round(2*coverage*precision/(coverage+precision),6)
 
 
 def coordinate_ascent(classes,candidates,evaluate,baseline=None,rounds=2,log=None):
