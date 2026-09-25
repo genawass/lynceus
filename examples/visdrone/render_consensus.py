@@ -50,11 +50,18 @@ def panel(image, title, subtitle, boxes):
 
 
 def confirmations(paths):
-    """One lookup per verifier: (image, object id) -> confirmed."""
+    """One lookup per verifier: (image, object id) -> confirmed.
+
+    A path may end in @THRESHOLD to re-apply a stricter score threshold to rows already recorded,
+    so an operating point can be drawn without re-running the verifier.
+    """
     table = {}
     for name, path in paths:
+        path, _, threshold = path.partition('@')
         rows = json.loads(Path(path).read_text())['rows']
-        table[name] = {(r['image'], r['id']): r['confirmed'] for r in rows}
+        floor = float(threshold) if threshold else None
+        table[name] = {(r['image'], r['id']): r['confirmed'] and (
+            floor is None or (r['verifier_score'] is not None and r['verifier_score'] >= floor)) for r in rows}
     return table
 
 
@@ -69,8 +76,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--mapping', default=str(Path(__file__).parent / 'mapping-strict-v2.json'))
     parser.add_argument('--runs', required=True)
-    parser.add_argument('--verifier', action='append', required=True, metavar='NAME=ROWS.json',
-                        help='repeatable; each adds a verifier whose confirmations form the rules')
+    parser.add_argument('--verifier', action='append', required=True, metavar='NAME=ROWS.json[@THRESHOLD]',
+                        help='repeatable; each adds a verifier whose confirmations form the rules; '
+                             '@THRESHOLD keeps only confirmations scoring at least that')
     parser.add_argument('--external', action='append', default=[], metavar='NAME=DIR',
                         help='repeatable; DIR/<stem>.json is a list of {"label", "box": [x1, y1, x2, y2]} '
                              'from a detector outside the pipeline, drawn as its own panel')
