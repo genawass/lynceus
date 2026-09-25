@@ -29,7 +29,8 @@ The next proposal-model experiment is frozen in [WeDetect and OWLv2 model select
 | WP-06 multiscale discovery | **Partial.** Frozen full-frame plus overlapping source-resolution tile planner, cross-view merging on intersection-over-smaller, union evidence store with per-candidate lineage, route coverage manifest | Class-independent proposals, semantic inventory, concept and exemplar routes; locked ablation on an adequate panel |
 | WP-08 conservative naming | **Partial.** Per-class score distributions from the adapter, relative runner-up comparison, broader-supported-class fallback, `unknown_object` when no useful ancestor exists, alternatives retained | Crop and context re-interpretation, synonym normalisation, prompt-anchoring controls |
 | WP-09 evidence assessment | **Partial.** Per-dimension assessment under frozen rules, explicit acceptance, risk-versus-coverage sweep | Externally calibrated event estimates, ancestry metadata, independent verification |
-| WP-07, WP-10 | Not delivered | Instance graph and boundary refinement, omission audits, saturation |
+| WP-07 boundary refinement | **Partial.** Box-prompted refinement against source-resolution pixels as a pipeline stage, proposed and refined geometry both recorded, extent disagreement flagged and the proposed box retained as an alternative | Instance graph, part/group reconciliation, alternative masks |
+| WP-10 omission audits | Not delivered | Blind rediscovery, residual inspection, stable-round counter, saturation. Miss attribution measured two references never proposed out of 717, so the headroom this package addresses is small in this domain |
 | WP-11–13 | Not delivered in this foundation slice | Training ignore-mask integration, human-label audit, detector pseudo-reference comparison |
 | WP-14–15 | Not delivered as a qualified release | Reproducible full model bundle, clean deployment validation, locked independent qualification |
 
@@ -53,7 +54,7 @@ VisDrone is aerial imagery, outside assumption A4, and ten images cannot support
 | CLIP ViT-L-14 | `openai/clip-vit-large-patch14` staged at `/home/genadiy/data/models/clip-vit-large-patch14`; supported by the pinned `transformers` 4.49.0 |
 | TTN weights | Both released variants (`ttn`, `ttnd`) downloaded from the repository's Dropbox links. No hashes are published and the repository states no licence, so they are staged for measurement only and are not bundleable under WP-02/WP-14 |
 | SAM 1 | `facebook/sam-vit-huge`, ungated, supported by the pinned `transformers` via `SamModel` |
-| SAM 3 | **Blocked.** `facebook/sam3` is gated `manual` on Hugging Face and returns 401 without an approved access request; no token is configured on this host. The pinned `transformers` 4.49.0 also has no SAM 2 or SAM 3 support, so adopting it is a dependency bump to be staged as its own change (D32) |
+| SAM 3 | **Staged.** Obtained outside the gated `facebook/sam3` route and bundled at `.chkpts/bundle-sam3.json`, 9 assets hash-verified, adapter `sam3`, capability `box_prompted_boundary_refinement`. Requires `transformers` 5.17.0, which is the current pin; the earlier 4.49.0 bundle is retained as `bundle-owlv2-large-transformers-4.49.0.json` |
 
 ## External resources still pending
 
@@ -690,11 +691,17 @@ correctly refusing an unswept panel with `incomplete_sweep: 6 of 6 tiles unvisit
 panel passing through `lynceus evaluate` with `category_scope: null`, no out-of-scope exclusions,
 and denominators intact.
 
-The default selection is the held-out panel already measured, so annotating those images converts
-the existing precision bound into a number rather than producing a second result comparable to
-nothing. What remains is the annotation itself, which is human work this delivery cannot do for
-itself, and it is now the single blocker between this system and an interpretable precision figure,
-a first calibration, and any G9 outcome at all.
+The default selection is the held-out panel already measured, so annotating those images would
+convert the existing precision bound into a number rather than producing a second result comparable
+to nothing.
+
+**Superseded as the critical path.** The harness stands and the skeletons are prepared, but manual
+annotation of a dense panel was judged unlikely to happen (D51) and was replaced: D53 recovers
+precision by auditing a sample of unmatched boxes, and D54 replaces manual adjudication with
+automatic verification against an independent model whose sensitivity is itself measured on the
+settled half of the population. Those produced the 0.266 bound and the ~0.53 estimate reported
+below. The panel harness remains available for a future exhaustive panel and is no longer what
+blocks a precision figure.
 
 ### The review page
 
@@ -907,3 +914,282 @@ clear 0.75. That returns the question to boundary quality, which is where miss a
 boundary headroom already placed it, and it is a reminder that removing a visible failure is not
 the same as removing the thing it was standing in front of.
 
+
+## Measured: the three improvements together, and one of them is not an improvement
+
+Refinement, the searched prompt vocabulary and the co-occurrence ontology were each measured
+alone. Nothing had measured them together, and they interact: the vocabulary changes which boxes
+exist, refinement changes their geometry, co-occurrence changes their labels. Both panels were run
+with all three, and with refinement and co-occurrence only.
+
+| held-out, 717 references | kept | IoU>=.50 | IoU>=.75 | IoU>=.85 | recall | precision | G4 | G5 | `unknown` |
+|---|---|---|---|---|---|---|---|---|---|
+| shipped | 2374 | 631 | 358 | 205 | 0.8801 | 0.2658 | 0.4728 | 0.3249 | 166 |
+| **refinement + co-occurrence** | 2311 | 624 | **374** | **219** | 0.8703 | 0.2700 | **0.5077** | 0.3510 | 0 |
+| all three | 1630 | 592 | 363 | 216 | 0.8257 | 0.3632 | 0.4951 | 0.3649 | 0 |
+
+| development, 827 references | kept | IoU>=.50 | IoU>=.75 | IoU>=.85 | recall | precision | G4 | G5 | `unknown` |
+|---|---|---|---|---|---|---|---|---|---|
+| shipped | 2543 | 672 | 372 | 206 | 0.8126 | 0.2643 | 0.4365 | 0.3065 | 176 |
+| **refinement + co-occurrence** | 2485 | **678** | **415** | **234** | **0.8198** | 0.2728 | **0.4788** | 0.3451 | 0 |
+| all three | 1740 | 621 | 391 | 227 | 0.7509 | 0.3569 | 0.4571 | 0.3655 | 0 |
+
+Refinement and co-occurrence together improve every quantity the reference can adjudicate, on both
+panels: matches at both tight thresholds, useful-label coverage, the localization ratio, and
+abstention removed entirely, with precision slightly up. Recall moves -0.0098 on one panel and
++0.0072 on the other, which is the shape of no effect rather than a trade.
+
+Adding the searched vocabulary reverses part of that. It is worse than refinement and co-occurrence
+alone at IoU 0.75 (363 against 374, and 391 against 415), at IoU 0.85, and on useful-label
+coverage, on both panels, and it costs 0.045 and 0.069 of recall. Its only gain is precision.
+
+That gain is the one number here the reference cannot adjudicate. The vocabulary removes 744 boxes
+on the held-out panel and loses 32 matches doing it, so roughly 712 removals are of unmatched
+boxes -- and verification measured that around 644 of 1743 undecided boxes are real objects
+VisDrone never annotated. A precision figure assembled mostly from deleting unmatched boxes
+measures the reference's vocabulary as much as the annotator's correctness, while the recall and
+coverage losses paid for it are fully adjudicated.
+
+So the searched vocabulary is not adopted, and the reason is stronger than D59 recorded: it is not
+a trade between an unverifiable gain and a verifiable cost, it is worse on the verifiable metrics
+as well. `owlv2-aerial-searched-v2` remains shipped as an artifact, and the measurement above is
+the reason it is not the recommendation.
+
+### Recommended configuration
+
+`--ontology aerial-traffic-strict-v2 --refine-bundle <sam3 bundle>` with the baseline vocabulary.
+Refinement cannot be a built-in default because the refiner bundle path is deployment-specific, so
+the recommendation is documented rather than hardcoded. The panel refines in about 47s per image
+on one RTX 3060, roughly a third above the unrefined cost.
+
+## Measured: consensus as a pipeline stage, and it is the best filter found
+
+Verification was a separate script producing a report. It is now a stage: `--verify-bundle` loads
+an independent verifier, every retained box carries its confirmation into the candidate store, and
+`--require-verification` makes acceptance depend on it. Nothing is removed -- an unconfirmed box
+keeps its geometry and records `unconfirmed_by_independent_model`, because a box the verifier
+missed and a box that is not there are the same observation.
+
+Both panels, on the recommended configuration with refinement:
+
+| | kept | confirmed | sensitivity on known positives | recall | precision |
+|---|---|---|---|---|---|
+| held-out, unfiltered | 2311 | | | 0.8703 | 0.2700 |
+| held-out, confirmed only | 1252 | 54.2% | **0.9792** | 0.8522 | **0.4880** |
+| development, unfiltered | 2485 | | | 0.8198 | 0.2728 |
+| development, confirmed only | 1374 | 55.3% | **0.9853** | 0.8077 | **0.4862** |
+
+Precision nearly doubles for roughly 1.5 points of recall, and the direction and magnitude are the
+same on both panels. Every other filter tried was worse: the searched vocabulary bought 0.09 of
+precision for 0.042 of recall and lost tight-threshold matches with it, a raw score threshold cost
+0.20 of recall for 0.22 of precision, and box fusion and TTN pruning were negative outright.
+
+Sensitivity is higher than the 0.967 measured before refinement, on both panels. That is expected
+rather than surprising: tighter boxes match the verifier's detections more often, so refinement and
+verification compound instead of competing.
+
+What this does not establish is that the removed boxes are false. Sensitivity is measurable because
+known positives exist; specificity is not, because no box here is a known negative. Two models of
+overlapping lineage also fail alike, so confirmation is reproducibility rather than independent
+support, and the capability record says so in the run. The honest reading is that filtering to
+confirmed boxes trades a measured 1.5 points of recall for a precision figure that remains a bound.
+
+## Measured: a third verifier, and why it is not adopted
+
+Grounding DINO was staged as an independent verifier on the argument that architectural separation
+is what makes agreement worth anything: a Swin backbone and a BERT text encoder against OWLv2's
+CLIP-style tower and SAM 3's presence head. It is bundled, preflights, and its span-to-class
+mapping returned no unmapped spans on the panel.
+
+The first measurement was unfair, and finding that out was worth more than the result it revised.
+Both verifiers were tiled identically, which was the obvious confound and was checked. Two others
+were not. SAM 3 receives nine forward passes per tile to Grounding DINO's one, because it is
+prompted per class while Grounding DINO consumes the whole phrase list at once. And Grounding DINO
+has a second threshold, `text_threshold`, gating span extraction, with no SAM 3 equivalent, left at
+its library default. Re-running shows what the harness cost:
+
+| configuration | sensitivity on known positives | sensitivity at <16px |
+|---|---|---|
+| tile 512, threshold 0.30 | 0.7612 | 0.6149 |
+| tile 512, threshold 0.10 | 0.8269 | 0.7500 |
+| tile 256, threshold 0.15 | **0.8862** | **0.8176** |
+| SAM 3, tile 512, threshold 0.30 | 0.9792 | 0.9797 |
+
+Small-object sensitivity moved from 0.615 to 0.818 on tiling and thresholds alone, so the first
+reading -- that the model was largely blind below 32 pixels -- was substantially an artifact of how
+it was asked. A negative result about a model is only as good as the fairness of the configuration
+it was measured in.
+
+It is still not adopted, and at the corrected configuration the reason is cleaner:
+
+| rule | sensitivity | confirmed (undecided) | kept | recall | precision |
+|---|---|---|---|---|---|
+| SAM 3 | 0.9792 | 0.3800 | 1252 | 0.8522 | 0.4880 |
+| Grounding DINO, tile 256 | 0.8862 | 0.2306 | 942 | 0.7713 | 0.5870 |
+| either confirms | **0.9792** | 0.4161 | 1313 | 0.8522 | 0.4653 |
+| both confirm | 0.8862 | 0.1944 | 881 | 0.7713 | **0.6277** |
+
+Where it counts, Grounding DINO's confirmations are a subset of SAM 3's. The two agree on 0.8131 of
+boxes; SAM 3 confirms 371 that Grounding DINO does not, 58 of them known positives, while Grounding
+DINO confirms 61 that SAM 3 does not, **none** of them known positives. Taking the union leaves
+sensitivity at 0.9792, exactly SAM 3 alone. A second architecture, fairly configured, added no
+known-real box.
+
+So the third lineage did not decorrelate on this data. That is a finding about these two models at
+this object scale, not about Grounding DINO as a detector, which was not tested here.
+
+One operating point is worth keeping rather than discarding. Requiring both verifiers reaches
+0.6277 precision at 0.7713 recall, against SAM 3 alone at 0.4880 and 0.8522. That is not dominated;
+it is a different point on the risk-coverage curve, and a consumer wanting fewer and surer boxes
+can have it. What it cannot be called is more evidence.
+
+## Measured: a class-agnostic fourth model, and a pattern across all three
+
+Grounding DINO failed to decorrelate, so the next candidate was chosen to differ on every axis
+that one shared. WeDetect-Uni has a ConvNeXt backbone rather than a vision transformer, takes no
+prompt at all, and letterboxes to 1280 against the panel's 1360x765 frames. Being class-agnostic
+makes it the only verifier here whose agreement cannot be confounded by vocabulary or phrasing:
+it is asked whether something is there, not whether a named thing is there.
+
+It is GPL-v3, so it is loaded from a directory the bundle names rather than vendored, and the
+manifest records the licence. It is staged for measurement and is not distributable under WP-14.
+
+Configured across four settings rather than one default, after the Grounding DINO correction:
+
+| configuration | sensitivity | <16px | confirmed (undecided) | kept | recall | precision | wall |
+|---|---|---|---|---|---|---|---|
+| whole frame, threshold 0.20 | 0.6955 | 0.4797 | 0.0990 | 601 | 0.6053 | 0.7221 | 19s |
+| whole frame, threshold 0.05 | 0.8542 | 0.7027 | 0.2662 | 982 | 0.7434 | 0.5428 | 19s |
+| **tile 512, threshold 0.05** | **0.9103** | 0.8581 | 0.3290 | 1123 | 0.7922 | 0.5058 | **104s** |
+| tile 256, threshold 0.05 | 0.8910 | 0.8176 | 0.2940 | 1052 | 0.7755 | 0.5285 | 439s |
+| SAM 3, tile 512, threshold 0.30 | 0.9792 | 0.9797 | 0.3800 | 1252 | 0.8522 | 0.4880 | 579s |
+
+Tiling helps until it does not. Grounding DINO improved monotonically as tiles shrank; WeDetect
+peaks at 512 and falls at 256, because its 1280 input already upscales a 512 crop 2.5 times and a
+smaller tile mostly fragments objects across borders. A tile schedule is not a shared parameter
+between models, it is a per-model one.
+
+At its best setting it reaches 0.9103 sensitivity in 104 seconds, better than Grounding DINO's
+best on both counts and five and a half times faster than SAM 3, whose per-class prompting costs
+ninety forward passes per frame to WeDetect's ten.
+
+### The pattern
+
+| verifier, best setting | sensitivity | known positives it confirms that SAM 3 does not |
+|---|---|---|
+| Grounding DINO, tile 256 | 0.8862 | **0** |
+| WeDetect-Uni, tile 512 | 0.9103 | **1** |
+| WeDetect-Uni, whole frame | 0.8542 | 3 |
+| WeDetect-Uni, tile 256 | 0.8910 | 3 |
+
+Taking the union of SAM 3 and WeDetect lifts sensitivity from 0.9792 to 0.9808. Adding Grounding
+DINO instead leaves it at 0.9792 exactly. Two architectures selected for maximum separation from
+the first -- one a phrase grounder on a Swin backbone, the other a convolutional model with no text
+conditioning whatsoever -- both confirm what is nearly a subset of SAM 3's known positives.
+
+That is now a pattern rather than a quirk of one model, and it is the useful finding here: on this
+data, at this object scale, **adding verifiers does not add sensitivity**. The decorrelation that
+would make consensus more than reproducibility did not appear, and it did not appear along the
+architectural axis that was supposed to produce it.
+
+One asymmetry is worth stating because it is the limit rather than the result. On the population
+that can be measured -- boxes matching an eligible reference -- WeDetect adds one box. On the
+population that cannot be measured it differs substantially: it confirms 202 undecided boxes SAM 3
+does not, lifting the union's confirmation rate on undecided boxes from 0.3800 to 0.4991. So the
+models do see different things; nothing here can say whether those things are real objects VisDrone
+omitted or false positives the two happen not to share. That is the finite-category ceiling, and
+no further model relieves it.
+
+### What is kept
+
+Requiring both verifiers reaches 0.6156 precision at 0.7908 recall, against SAM 3 alone at 0.4880
+and 0.8522. Like the Grounding DINO intersection it is not dominated, it is a stricter point on the
+risk-coverage curve, and it costs a second model's runtime. SAM 3 alone remains the recommended
+verifier: highest sensitivity, and the only one whose small-object sensitivity holds above 0.94 in
+every size bin.
+
+## Measured: the verifier threshold is the precision control, fitted on development
+
+SAM 3's detection score already includes its presence head -- the processor multiplies each query's
+score by the presence probability -- so the 0.3 the verification stage runs at is presence filtering
+already, and raising it is the calibrated-threshold step the auto-labelling literature recommends.
+[`fit_verify_threshold.py`](../examples/visdrone/fit_verify_threshold.py) fits it on the development
+panel, writes the thresholds, and only then scores held-out once (D57).
+
+The fit targets sensitivity on known positives, not precision. Precision is a bound here, and
+optimising a bound rewards deleting real objects the reference omits; sensitivity is the one quantity
+the reference measures without that ambiguity.
+
+| operating point (fitted on development) | threshold | dev sensitivity | held-out sensitivity | held-out recall | held-out precision | kept |
+|---|---|---|---|---|---|---|
+| current | 0.300 | 0.9853 | 0.9792 | 0.8522 | 0.4880 | 1252 |
+| sensitivity 0.98 | 0.304 | 0.9808 | 0.9760 | 0.8494 | 0.4935 | 1234 |
+| sensitivity 0.95 | 0.325 | 0.9528 | 0.9615 | 0.8368 | 0.5177 | 1159 |
+| sensitivity 0.90 | 0.392 | 0.9012 | 0.9022 | 0.7852 | 0.5681 | 991 |
+| sensitivity 0.85 | 0.461 | 0.8510 | 0.8558 | 0.7448 | 0.6131 | 871 |
+
+Every target transfers to held-out within 0.012, so these are frozen operating points rather than
+held-out tuning, selectable with `--verify-threshold`. Per-class thresholds were fitted for the three
+labels with at least 20 development positives and were worse on both panels at every target (0.5380
+against 0.5681 held-out precision at 0.90); they are not adopted.
+
+The threshold also re-prices consensus. Requiring Grounding DINO and SAM 3 to agree reached 0.6277
+precision at 0.7713 recall; SAM 3 alone at 0.461 reaches 0.6131 at 0.7448, with one model's runtime.
+Most of what a second verifier's agreement buys, a stricter threshold on the first already buys. The
+agreement rule was not fitted on development, so the comparison is indicative, not locked.
+
+## Measured: large and small VLMs as detectors and verifiers
+
+A published leaderboard (Roboflow, 250 images, 173 classes, mAP@50) reports frontier VLMs far above
+SAM 3 at zero-shot detection. Its SAM 3 configuration is unpublished, it scores only mAP@50, and its
+scenes are sparse and medium-scale, so it was measured here rather than adopted.
+
+**Opus 5.5, one image (0000346).** Run through subagents in a Claude Code session, so no API key is
+involved and nothing is reproducible or bundleable (WP-14). SAHI means six 512px tiles upscaled 2x
+plus the whole frame, routed by size: objects of 96px or more from the frame, smaller from tiles.
+Routing matters -- a merge ranked by tile-edge distance lost the bus and three large cars.
+
+| image 0000346, 82 references | kept | IoU>=.50 | IoU>=.85 | recall | precision | <32px |
+|---|---|---|---|---|---|---|
+| Opus 5.5 whole frame | 88 | 58 | 21 | 0.707 | 0.659 | 6/14 |
+| Opus 5.5 SAHI, size-routed | 101 | 66 | 29 | 0.805 | 0.653 | 12/14 |
+| Lynceus retained (refinement + co-occurrence) | 254 | 76 | | 0.927 | 0.299 | |
+| of which SAM 3 confirms | 136 | 76 | | 0.927 | 0.559 | |
+
+Opus names well (88% of matches in the right VisDrone class) and places fewer boxes on nothing, but
+finds fewer objects and draws looser boxes. It adds 2 references SAM 3's confirmed set misses, and
+misses 12 that set finds. On this image its advantage is precision and naming, not coverage. One image
+and one sample per tile is an observation, not a result.
+
+A correction belongs here: an earlier reading of this image paired SAM 3's row ids with the
+`combined-seed1` run (all three changes, the non-recommended configuration) instead of
+`refined-v2-seed1`, and reported Opus adding 16 references SAM 3 missed. That was an id mismatch
+between runs. The numbers above use the run SAM 3 actually verified.
+
+**Qwen3-VL-8B, local, 4-bit.** Staged at revision `0c351dd` (Apache-2.0), bitsandbytes nf4 on the
+RTX 3060. Three roles, each a fair configuration of the obvious setup:
+
+- *Detector, SAHI, one prompt per class* (0000346): 0.744 recall, 0.449 precision, 10/14 small, about
+  40 minutes per image. Mixed-class prompting degenerated into repetition loops (123 outputs, 12
+  distinct), and even per-class prompting emits ladders of coordinates enumerated rather than seen.
+- *Crop verifier* (held-out panel, same 2311 boxes as SAM 3): the box drawn in red on a crop with 3x
+  context, one-word answer.
+
+| rule | kept | sensitivity | undecided confirmed | recall | precision |
+|---|---|---|---|---|---|
+| SAM 3 | 1252 | 0.9792 | 0.3800 | 0.8522 | 0.4880 |
+| Qwen3-VL-8B crop | 1657 | 0.9471 | 0.6319 | 0.8243 | 0.3567 |
+| either | 1844 | 0.9952 | 0.7250 | 0.8661 | 0.3368 |
+| both | 1065 | 0.9311 | 0.2869 | 0.8103 | 0.5455 |
+
+  It is less sensitive (0.905 against 0.980 below 16px) and far more permissive. It is the first
+  verifier to decorrelate at all -- 10 known positives SAM 3 misses, against 0 and 1 for Grounding
+  DINO and WeDetect -- but not usefully.
+- *Tile plus native bbox_2d coordinates*, scored from next-token probabilities (0000346): it confirms
+  95% of undecided boxes at 0.5 and 88% at 0.98. A control moving known positives onto empty ground
+  showed it partly reads coordinates (empty ground confirmed 42%, real boxes 100%), but not finely
+  enough to reject the parts, duplicates and clusters that make up the undecided population.
+
+So a zero-shot small VLM is not the missing local component. Meta's exhaustivity verifier is a
+fine-tuned model; the untested version of that here is a verifier fine-tuned on labels from a large
+model, which belongs with WP-11–13.
