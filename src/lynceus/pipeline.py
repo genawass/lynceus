@@ -225,6 +225,40 @@ def consolidate(observations,ios_threshold,iou_threshold,rounds=2,fuse=True,onto
 DEFAULT_REFINE_IOU=0.7
 
 
+def verify_objects(objects,evidence,candidates,verifier,image,ontology,vocabulary_id,match_iou):
+    """Record whether an independent model detects something at each retained box.
+
+    Confirmation is evidence and not truth. Two models of overlapping lineage agree partly because
+    they fail alike, so this supports a one-sided reading only: a confirmed box has independent
+    support, an unconfirmed box is either absent or missed by the verifier, and nothing here
+    distinguishes those two. Acceptance may require confirmation; nothing is removed.
+    """
+    from .vocabulary import load_vocabulary,resolve_prompts
+    vocabulary=load_vocabulary(vocabulary_id) if vocabulary_id else None
+    resolution=resolve_prompts(ontology,vocabulary)
+    prompts={phrase:class_id for class_id,phrase in zip(resolution['classes'],resolution['prompts'])}
+    detections=verifier.detect(image,prompts)
+    records=[]
+    for obj,ev,candidate in zip(objects,evidence,(c for c in candidates if c['disposition']=='retained')):
+        best,best_iou=None,0.0
+        for d in detections:
+            value=iou(obj['bbox_xyxy'],d['bbox_xyxy'])
+            if value>=match_iou and value>best_iou: best,best_iou=d,value
+        record={'object':obj['id'],'confirmed':best is not None,
+                'verifier_label':best['label'] if best else None,
+                'verifier_score':round(best['score'],6) if best else None,
+                'overlap':round(best_iou,6) if best else None,
+                'label_agrees':bool(best and best['label']==obj['label']['id'])}
+        ev['verified']=record['confirmed'];ev['verifier_score']=record['verifier_score']
+        candidate['verification']=record
+        if not record['confirmed']:
+            obj['uncertainty']['reasons'].append('unconfirmed_by_independent_model')
+        records.append(record)
+    return {'detections':len(detections),'confirmed':sum(r['confirmed'] for r in records),
+            'objects':len(records),'match_iou':match_iou,
+            'independence':'shared_transformer_lineage; agreement is reproducibility, not confirmation'}
+
+
 def refine_objects(objects,evidence,candidates,refiner,image,tolerance,max_alternatives):
     """Replace proposed geometry with refined geometry, keeping the proposal inspectable.
 
@@ -342,7 +376,8 @@ def calibrated_probability(spec,value):
     return None
 
 
-ACCEPTANCE_DEFAULTS={'score':0.5,'min_views':2,'boundary_iou':0.8,'granularity_ios':0.7}
+ACCEPTANCE_DEFAULTS={'score':0.5,'min_views':2,'boundary_iou':0.8,'granularity_ios':0.7,
+                     'require_verification':False}
 
 
 def assess(objects,evidence,planned_views,rules):
@@ -362,9 +397,16 @@ def assess(objects,evidence,planned_views,rules):
     for index,(obj,ev) in enumerate(zip(objects,evidence)):
         reasons=[];states={}
         strong=ev['score']>=rules['score']
-        states['existence']='supported' if strong and ev['views']>=required_views else 'unresolved'
+        # Independent confirmation is evidence a second model saw something here. It is not truth,
+        # and an unconfirmed box may be absent or merely missed, so it withholds support rather
+        # than asserting the box is wrong.
+        unconfirmed=rules.get('require_verification') and ev.get('verified') is False
+        states['existence']='supported' if strong and ev['views']>=required_views and not unconfirmed else 'unresolved'
         if states['existence']=='supported':
             reasons.append(f'reproduced_in_{ev["views"]}_views' if ev['views']>1 else 'single_view_schedule')
+            if ev.get('verified'):reasons.append('confirmed_by_independent_model')
+        elif unconfirmed and strong and ev['views']>=required_views:
+            reasons.append('unconfirmed_by_independent_model')
         else:
             reasons.append('weak_score' if not strong else 'insufficient_view_agreement')
         states['class']='supported' if strong and ev['useful'] else 'unresolved'
@@ -395,7 +437,8 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
              ontology_id=None,acceptance=None,name_ratio=DEFAULT_NAME_RATIO,
              merge_rounds=1,fuse_boxes_enabled=False,calibration=None,max_alternatives=8,
              refiner=None,refine_bundle=None,refine_iou=DEFAULT_REFINE_IOU,refine_tile_side=512,
-             merge_labels='common-ancestor',vocabulary_id=None):
+             merge_labels='common-ancestor',vocabulary_id=None,
+             verifier=None,verify_bundle=None,verify_iou=0.5,verify_threshold=0.3):
     started=time.perf_counter()
     image,metadata=normalize_image(image_path)
     bundle=preflight(bundle_path)
@@ -410,6 +453,8 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
     config={'profile':profile,'threshold':threshold,'verification':'none','device':device or 'auto',
             'tile_levels':tile_levels,'tile_overlap':tile_overlap,'merge_ios':merge_ios,'merge_iou':merge_iou,
             'planned_views':len(jobs),'max_alternatives':max_alternatives,'ontology':ontology['id'],'vocabulary':vocabulary_id,
+            'verify_bundle':str(Path(verify_bundle).resolve()) if verify_bundle else None,
+            'verify_iou':verify_iou,'verify_threshold':verify_threshold,
             'acceptance':rules,'name_ratio':name_ratio,
             'refine_bundle':str(Path(refine_bundle).resolve()) if refine_bundle else None,
             'refine_iou':refine_iou,'refine_tile_side':refine_tile_side,
@@ -419,7 +464,7 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
     manifest['sha256']=digest(canonical(manifest))
     artifacts['manifest']=write_artifact(root,'manifest.json',manifest)
     objects=[];evidence=[];candidates=[];observations=[];completed=[];failed=[]
-    error=None;capabilities=None;rounds_used=0;refinement=None;refiner_capabilities=None
+    error=None;capabilities=None;rounds_used=0;verification=None;verifier_capabilities=None;refinement=None;refiner_capabilities=None
     try:
         if adapter is None:
             from .adapters.owlv2 import Owlv2Adapter
@@ -476,6 +521,12 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
         if refiner is not None and objects:
             refiner_capabilities=refiner.capabilities() if hasattr(refiner,'capabilities') else None
             refinement=refine_objects(objects,evidence,candidates,refiner,image,refine_iou,max_alternatives)
+        if verify_bundle is not None and verifier is None:
+            from .adapters.sam3 import Sam3Verifier
+            verifier=Sam3Verifier(verify_bundle,device=device,threshold=verify_threshold)
+        if verifier is not None and objects:
+            verifier_capabilities=verifier.capabilities() if hasattr(verifier,'capabilities') else None
+            verification=verify_objects(objects,evidence,candidates,verifier,image,ontology,vocabulary_id,verify_iou)
         if rules is not None:assess(objects,evidence,len(jobs),rules)
         if calibration_spec is not None:
             for obj,ev in zip(objects,evidence):
@@ -496,6 +547,8 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
                      'model_calls':len(completed),'planned_views':len(jobs),'failed_views':len(failed),
                      'raw_observations':len(observations),'retained_objects':len(objects)}
     events=[{'stage':'discovery','status':status,'error':error,'capabilities':capabilities,'resources':stage_resources},
+            {'stage':'verification','status':status,'summary':verification,
+             'capabilities':verifier_capabilities,'resources':stage_resources},
             {'stage':'merge','status':status,'observations':len(observations),'retained':len(objects),
              'acceptance_rule':rules,
              'rounds_used':rounds_used,'box_fusion':fuse_boxes_enabled,

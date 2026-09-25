@@ -14,7 +14,8 @@ def acceptance_rules(args):
     """Frozen acceptance thresholds, or None to leave every object uncertain."""
     if not args.accept:return None
     given={'score':args.accept_score,'min_views':args.accept_min_views,
-           'boundary_iou':args.accept_boundary_iou,'granularity_ios':args.accept_granularity_ios}
+           'boundary_iou':args.accept_boundary_iou,'granularity_ios':args.accept_granularity_ios,
+           'require_verification':args.require_verification or None}
     return {k:v for k,v in given.items() if v is not None}
 
 
@@ -42,6 +43,10 @@ def build_parser():
     p.add_argument('--refine-iou',type=float,default=0.7,help='below this agreement the proposed box is kept as an alternative and the boundary is unresolved')
     p.add_argument('--refine-tile-side',type=int,default=512,help='source-resolution tile side for refinement')
     p.add_argument('--calibration',help='calibration artifact; without it no probability is emitted and the reason is recorded')
+    p.add_argument('--verify-bundle',help='bundle for an independent verifier; records per-box confirmation')
+    p.add_argument('--verify-iou',type=float,default=0.5,help='overlap at which a verifier detection confirms a box')
+    p.add_argument('--verify-threshold',type=float,default=0.3,help='verifier detection threshold')
+    p.add_argument('--require-verification',action='store_true',help='acceptance additionally requires independent confirmation')
     p.add_argument('--accept',action='store_true',help='run the acceptance rule; without it every object stays uncertain')
     p.add_argument('--accept-score',type=float);p.add_argument('--accept-min-views',type=int)
     p.add_argument('--accept-boundary-iou',type=float);p.add_argument('--accept-granularity-ios',type=float)
@@ -62,6 +67,7 @@ def main(argv=None):
             merge_iou=args.merge_iou,device=args.device,threshold=args.threshold,
             ontology_id=args.ontology,vocabulary_id=args.vocabulary,acceptance=acceptance_rules(args),
             merge_rounds=args.merge_rounds,merge_labels=args.merge_labels,fuse_boxes_enabled=args.fuse,calibration=args.calibration,
+            verify_bundle=args.verify_bundle,verify_iou=args.verify_iou,verify_threshold=args.verify_threshold,
             refine_bundle=args.refine_bundle,refine_iou=args.refine_iou,refine_tile_side=args.refine_tile_side,
             **({} if args.name_ratio is None else {'name_ratio':args.name_ratio}))
         elif args.command=='resume':result=resume(args.run,args.output)

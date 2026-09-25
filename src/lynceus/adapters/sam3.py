@@ -122,3 +122,69 @@ class Sam3Refiner:
                                     'mask_quality':float(scores[position][best]),
                                     'view':f'refine-{window_index}'}
         return refined
+
+
+class Sam3Verifier:
+    """Independent confirmation of retained boxes by a second prompted detector.
+
+    The verifier answers one question per box: looking at the same pixels, does another model
+    detect something there. It is not a second opinion on the label and it is not truth. Two
+    models of overlapping lineage agree partly because they fail alike, so this yields
+    reproducibility and a one-sided bound, never correctness.
+
+    What makes the agreement readable is that half the retained population is already settled by
+    the reference, so the confirmation rate on known positives measures the verifier's sensitivity
+    on this data at this object scale rather than assuming it.
+
+    Detection runs in the same overlapping source-resolution tiles the refiner uses, because a
+    whole-frame pass delivers a twelve-pixel object at a fraction of its pixels and would measure
+    the verifier's blindness rather than the box's support.
+    """
+
+    def __init__(self,bundle,device=None,tile_side=512,threshold=0.3,amp=True):
+        from ..bundle import preflight,BundleError
+        self.bundle=preflight(bundle)
+        declared=self.bundle['manifest'].get('dependencies',{})
+        missing=[p for p in REQUIRED_DEPENDENCIES if p not in declared]
+        if missing:raise BundleError('undeclared_dependency: '+','.join(missing))
+        self.tile_side=tile_side;self.threshold=threshold;self.amp=amp
+        self._requested_device=device;self._model=None
+
+    def _ensure(self):
+        if self._model is not None:return
+        os.environ['HF_HUB_OFFLINE']='1';os.environ['TRANSFORMERS_OFFLINE']='1';os.environ['HF_HUB_DISABLE_TELEMETRY']='1'
+        import torch
+        from transformers import Sam3Model,Sam3Processor
+        self.device=self._requested_device or ('cuda' if torch.cuda.is_available() else 'cpu')
+        local=self.bundle['model_dir']
+        self._processor=Sam3Processor.from_pretrained(local,local_files_only=True)
+        self._model=Sam3Model.from_pretrained(local,local_files_only=True).eval().to(self.device)
+
+    def capabilities(self):
+        self._ensure()
+        return {'device':self.device,'tile_side':self.tile_side,'threshold':self.threshold,
+                'checkpoint':self.bundle['manifest'].get('checkpoint'),
+                'coordinate_convention':'source_pixel_xyxy','prompt':'text','amp':self.amp,
+                'independence':'shared_transformer_lineage_with_detector'}
+
+    def detect(self,image,prompts):
+        """Every detection the verifier makes, in source coordinates, one pass per tile per prompt."""
+        self._ensure()
+        import torch
+        windows=plan_windows(image.width,image.height,self.tile_side)
+        found=[]
+        for x1,y1,x2,y2 in windows:
+            view=image.crop((x1,y1,x2,y2))
+            for phrase,class_id in prompts.items():
+                inputs=self._processor(images=view,text=phrase,return_tensors='pt').to(self.device)
+                with torch.inference_mode():
+                    if self.amp and self.device=='cuda':
+                        with torch.autocast('cuda',dtype=torch.float16): output=self._model(**inputs)
+                    else: output=self._model(**inputs)
+                result=self._processor.post_process_instance_segmentation(
+                    output,threshold=self.threshold,target_sizes=[view.size[::-1]])[0]
+                for box,score in zip(result['boxes'].cpu().tolist(),result['scores'].cpu().tolist()):
+                    # The class id travels, not the phrasing: agreement must not depend on wording.
+                    found.append({'bbox_xyxy':[box[0]+x1,box[1]+y1,box[2]+x1,box[3]+y1],
+                                  'label':class_id,'score':float(score)})
+        return found

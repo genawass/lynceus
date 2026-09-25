@@ -31,6 +31,12 @@ def main():
     parser.add_argument('--merge-ios', type=float, default=0.6)
     parser.add_argument('--merge-iou', type=float, default=0.5)
     parser.add_argument('--vocabulary', help='per-model prompt vocabulary id')
+    parser.add_argument('--refine-bundle', help='refiner bundle; enables boundary refinement against pixels')
+    parser.add_argument('--verify-bundle', help='verifier bundle; records independent confirmation per box')
+    parser.add_argument('--verify-iou', type=float)
+    parser.add_argument('--verify-threshold', type=float)
+    parser.add_argument('--refine-iou', type=float, help='agreement below which the proposed box is kept as an alternative')
+    parser.add_argument('--refine-tile-side', type=int, help='source-resolution window side for refinement')
     parser.add_argument('--device')
     parser.add_argument('--limit', type=int, help='stop after this many images, for a timing probe')
     args = parser.parse_args()
@@ -53,8 +59,15 @@ def main():
                           tile_levels=args.tile_levels, tile_overlap=args.tile_overlap,
                           merge_ios=args.merge_ios, merge_iou=args.merge_iou,
                           device=args.device, threshold=args.threshold,
-                          ontology_id=mapping['ontology'], vocabulary_id=args.vocabulary)
+                          ontology_id=mapping['ontology'], vocabulary_id=args.vocabulary,
+                          refine_bundle=args.refine_bundle, verify_bundle=args.verify_bundle,
+                          **{k: v for k, v in (('refine_iou', args.refine_iou),
+                                               ('refine_tile_side', args.refine_tile_side),
+                                               ('verify_iou', args.verify_iou),
+                                               ('verify_threshold', args.verify_threshold)) if v is not None})
+        refined = sum(1 for o in result['objects'] if o.get('uncertainty', {}).get('boundary') == 'unresolved')
         print(f'[{index}/{len(stems)}] {stem}: {len(result["objects"])} retained, '
+              f'{refined} boundary-unresolved, '
               f'{result["summary"]["resources"]["raw_observations"]} observations, '
               f'{result["summary"]["resources"]["wall_seconds"]:.1f}s', flush=True)
     print(f'panel complete in {time.perf_counter() - started:.1f}s -> {out}')

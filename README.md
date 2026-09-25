@@ -86,6 +86,22 @@ An object is `accepted` only when all five are supported and the class is useful
 
 [`examples/visdrone/risk_coverage.py`](examples/visdrone/risk_coverage.py) sweeps the acceptance threshold and reports error against retained useful coverage at every operating point, including the all-abstention point where precision is undefined rather than perfect. It re-applies rules to evidence already recorded, so it costs no inference.
 
+### Recommended configuration
+
+Measured on two VisDrone panels, the configuration that is best on every quantity the reference can
+adjudicate is the co-occurrence ontology with boundary refinement and the baseline prompt
+vocabulary:
+
+```sh
+lynceus annotate IMAGE --bundle owlv2.json --output run/ \
+  --tile-levels 1 --ontology aerial-traffic-strict-v2 --refine-bundle sam3.json
+```
+
+Refinement is not on by default because the refiner bundle is deployment-specific. The shipped
+`owlv2-aerial-searched-v2` vocabulary is **not** recommended: it raises precision against a
+finite-category reference by removing boxes that reference cannot adjudicate, while losing recall,
+tight-threshold matches and useful-label coverage that it can. See [delivery status](docs/delivery-status.md).
+
 ### Exit codes
 
 | Code | Meaning |
