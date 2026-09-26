@@ -1,0 +1,47 @@
+{
+ "frozen": true,
+ "declared_before_predictions_seen": true,
+ "ontology": "aerial-traffic-strict-v2",
+ "domain": "elevated_oblique",
+ "split": "evaluation",
+ "selection_rule": "sorted(basename for images/val/*.jpg), random.Random(seed).sample(files, count), sorted",
+ "mapping_rule": "Each category permits its exact ontology counterpart plus the broader parent vehicle where one exists; categories outside the ontology are ineligible, not errors.",
+ "id": "rf100vl-aerial-pool-test-aerial-strict-v2",
+ "reference": "RF100-VL aerial-pool, test split (probicheaux/rf100-vl @ 6b59bae)",
+ "reference_root": "/home/genadiy/data/rf100-vl/visdrone-layout/aerial-pool",
+ "categories": {
+  "0": {
+   "name": "black hat",
+   "eligible": false,
+   "reason": "part_of_annotated_person"
+  },
+  "1": {
+   "name": "person at surface",
+   "permitted_labels": [
+    "person"
+   ]
+  },
+  "2": {
+   "name": "person underwater",
+   "permitted_labels": [
+    "person"
+   ]
+  },
+  "3": {
+   "name": "umpire",
+   "permitted_labels": [
+    "person"
+   ]
+  },
+  "4": {
+   "name": "white hat",
+   "eligible": false,
+   "reason": "part_of_annotated_person"
+  }
+ },
+ "known_limitations": [
+  "Elevated oblique view of a pool, not nadir aerial.",
+  "Swimmers are annotated; most spectators and officials on deck are not, so precision is a very loose bound. Sensitivity on known positives is the measurable quantity.",
+  "Caps are parts of annotated swimmers and are excluded from denominators."
+ ]
+}

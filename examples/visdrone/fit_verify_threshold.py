@@ -85,7 +85,8 @@ def summary(rows, rule, eligible):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--mapping', default=str(Path(__file__).parent / 'mapping-strict-v2.json'))
-    parser.add_argument('--dev-runs', required=True)
+    parser.add_argument('--apply', help='frozen fit file: score --heldout-runs with its rules, fitting nothing')
+    parser.add_argument('--dev-runs')
     parser.add_argument('--dev-seed', type=int, default=0)
     parser.add_argument('--heldout-runs', required=True)
     parser.add_argument('--heldout-seed', type=int, default=1)
@@ -98,6 +99,23 @@ def main():
     mapping = json.loads(Path(args.mapping).read_text())
     root = Path(mapping['reference_root'])
     targets = [float(t) for t in args.targets.split(',')]
+
+    if args.apply:
+        # Transfer test: the rules were frozen on another panel and are not touched here.
+        frozen = json.loads(Path(args.apply).read_text())
+        rows, eligible = rows_for(args.heldout_runs, root, mapping, args.heldout_seed, args.count)
+        report = {'rules_from': args.apply, 'mapping': mapping['id'], 'runs': args.heldout_runs,
+                  'seed': args.heldout_seed, 'count': args.count, 'boxes': len(rows), 'eligible': eligible,
+                  'known_positives': sum(r['known'] for r in rows),
+                  'scores': {name: summary(rows, rule, eligible) for name, rule in frozen['rules'].items()}}
+        Path(args.out).write_text(json.dumps(report, indent=2))
+        print(f"{mapping['id']}: {len(rows)} boxes, {eligible} eligible, {report['known_positives']} known positives")
+        for name, s in report['scores'].items():
+            print(f"  {name:24s} kept {s['kept']:5d} sens {s['sensitivity']:.4f} recall {s['recall']:.4f} "
+                  f"precision {s['precision']}")
+        return
+    if not args.dev_runs:
+        parser.error('--dev-runs is required unless --apply is given')
 
     dev, dev_eligible = rows_for(args.dev_runs, root, mapping, args.dev_seed, args.count)
     classes = sorted({r['label'] for r in dev})

@@ -1193,3 +1193,51 @@ RTX 3060. Three roles, each a fair configuration of the obvious setup:
 So a zero-shot small VLM is not the missing local component. Meta's exhaustivity verifier is a
 fine-tuned model; the untested version of that here is a verifier fine-tuned on labels from a large
 model, which belongs with WP-11–13.
+
+## Measured: the frozen threshold on data it never saw, and on classes it never saw
+
+Four RF100-VL test sets (`probicheaux/rf100-vl` @ `6b59bae`, Apache-2.0) were converted into the
+VisDrone layout by [`import_rf100vl.py`](../examples/visdrone/import_rf100vl.py), each with a mapping
+declared before any prediction was seen, and run through the unchanged configuration: OWLv2 large at
+one tiling level, SAM 3 refinement and SAM 3 verification. The thresholds fitted on the VisDrone
+development panel were applied with `fit_verify_threshold.py --apply`; nothing was refitted.
+
+| dataset | ontology | images | references | found (IoU 0.5) | kept at 0.392 | precision at 0.392 |
+|---|---|---|---|---|---|---|
+| VisDrone held-out | aerial-traffic-strict-v2 | 10 | 717 | 0.870 | 0.902 | 0.568 |
+| uavdet-small | aerial-traffic-strict-v2 | 20 | 1409 | 0.889 | 0.923 | 0.695 |
+| aerial-pool | aerial-traffic-strict-v2 | 15 | 166 | 0.849 | 0.943 | 0.359 |
+| human-detection-in-floods | aerial-traffic-strict-v2 | 10 | 292 | 0.325 | 0.989 | 0.344 |
+| APOCE construction | aerial-construction-v1 | 40 | 113 | 0.858 | **0.835** | 0.182 |
+
+"Kept" is the share of boxes matching a reference that survive the threshold, against a 0.90 target.
+
+On road users the threshold transfers and errs toward keeping: 0.90 to 0.99 on three datasets it
+was never fitted on. How much it removes depends on the scene. It lifts precision from about 0.27 to
+0.57–0.70 in cluttered traffic, and changes little over water, where there was little to remove.
+
+The flood set's low recall is a box convention, not missed people. Its labellers box splash, wake
+and shadow; Lynceus, refined by SAM 3, boxes the body at a median 0.57 of the reference area. With a
+box lying at least 80% inside a reference counted as found, recall is 0.668 and precision 0.707.
+IoU 0.5 measures the convention when a dataset has its own; a per-dataset match rule declared in the
+mapping would separate the two.
+
+APOCE is the first measurement on classes other than road users, with a new ontology of seven
+machines under a `construction_equipment` parent and prompts equal to the class names. Finding holds
+(0.858). The threshold does not fully transfer: 0.835 kept at 0.392, and only 0.897 at 0.30, most of
+the loss from tower cranes, 8 of 12 unconfirmed, a thin structure that barely fills its box.
+
+Naming is the weak step once classes are fine-grained. [`label_report.py`](../examples/visdrone/label_report.py)
+scores each matched box's label as exact, broader (a parent the mapping accepts) or wrong:
+
+| panel | Lynceus exact | Lynceus broader | Lynceus wrong | SAM 3 exact | SAM 3 broader | SAM 3 wrong |
+|---|---|---|---|---|---|---|
+| VisDrone held-out | 0.290 | 0.647 | 0.062 | 0.576 | 0.313 | 0.111 |
+| APOCE | 0.031 | 0.969 | 0.000 | 0.333 | 0.241 | 0.425 |
+
+Conservative naming almost never guesses wrong, because it almost never guesses: with seven similar
+machine classes the runner-up is nearly always close, so it falls back to the parent 97% of the time.
+SAM 3's own label is exact twice as often on VisDrone and ten times as often on APOCE, at a higher
+wrong rate; on APOCE it confuses excavators with bulldozers, dump trucks and piling machines (8 of 45
+exact). Using the verifier's label to refine a parent fallback is the obvious next measurement; it is
+not adopted here.

@@ -1,0 +1,68 @@
+{
+ "id": "rf100vl-apoce-test-aerial-construction-v1",
+ "frozen": true,
+ "declared_before_predictions_seen": true,
+ "reference": "RF100-VL apoce-aerial-photographs-for-object-detection-of-construction-equipment, test split (probicheaux/rf100-vl @ 6b59bae)",
+ "reference_root": "/home/genadiy/data/rf100-vl/visdrone-layout/apoce-aerial-photographs-for-object-detection-of-construction-equipment",
+ "ontology": "aerial-construction-v1",
+ "domain": "aerial_drone",
+ "split": "evaluation",
+ "selection_rule": "sorted(basename for images/val/*.jpg), random.Random(seed).sample(files, count), sorted",
+ "categories": {
+  "3": {
+   "name": "excavator",
+   "permitted_labels": [
+    "excavator",
+    "construction_equipment"
+   ]
+  },
+  "2": {
+   "name": "dump-truck",
+   "permitted_labels": [
+    "dump_truck",
+    "construction_equipment"
+   ]
+  },
+  "6": {
+   "name": "tower-crane",
+   "permitted_labels": [
+    "tower_crane",
+    "construction_equipment"
+   ]
+  },
+  "1": {
+   "name": "concrete-mixer",
+   "permitted_labels": [
+    "concrete_mixer",
+    "construction_equipment"
+   ]
+  },
+  "0": {
+   "name": "bulldozer",
+   "permitted_labels": [
+    "bulldozer",
+    "construction_equipment"
+   ]
+  },
+  "5": {
+   "name": "piling-machine",
+   "permitted_labels": [
+    "piling_machine",
+    "construction_equipment"
+   ]
+  },
+  "4": {
+   "name": "lifting-equipment",
+   "permitted_labels": [
+    "lifting_equipment",
+    "construction_equipment"
+   ]
+  }
+ },
+ "mapping_rule": "Each category permits its exact ontology class plus the parent construction_equipment.",
+ "known_limitations": [
+  "The SAM 3 threshold was fitted on road users; this measures whether it transfers to machine classes it never saw.",
+  "People, cars and trucks on public roads are not labelled, so they count as unmatched: precision is a bound.",
+  "lifting-equipment has 2 test instances; its per-class numbers mean nothing."
+ ]
+}

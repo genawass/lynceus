@@ -148,7 +148,7 @@ def main():
                              [(o['bbox_xyxy'], GREEN if i in hit_pred else RED)
                               for i, o in enumerate(kept)]))
 
-        panels.append(panel(image, f'{stem} - VisDrone reference',
+        panels.append(panel(image, f'{stem} - reference ({mapping["id"]})',
                             f'{len(eligible)} eligible  green=found by some rule  red=found by none',
                             [(r['bbox_xyxy'], GREEN if i in found_by_any else RED)
                              for i, r in enumerate(eligible)]))

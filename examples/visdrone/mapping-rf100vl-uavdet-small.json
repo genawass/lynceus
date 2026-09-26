@@ -1,0 +1,67 @@
+{
+ "frozen": true,
+ "declared_before_predictions_seen": true,
+ "ontology": "aerial-traffic-strict-v2",
+ "domain": "aerial_drone",
+ "split": "evaluation",
+ "selection_rule": "sorted(basename for images/val/*.jpg), random.Random(seed).sample(files, count), sorted",
+ "mapping_rule": "Each category permits its exact ontology counterpart plus the broader parent vehicle where one exists; categories outside the ontology are ineligible, not errors.",
+ "id": "rf100vl-uavdet-small-test-aerial-strict-v2",
+ "reference": "RF100-VL uavdet-small, test split (probicheaux/rf100-vl @ 6b59bae)",
+ "reference_root": "/home/genadiy/data/rf100-vl/visdrone-layout/uavdet-small",
+ "categories": {
+  "0": {
+   "name": "bicycle",
+   "permitted_labels": [
+    "bicycle",
+    "vehicle"
+   ]
+  },
+  "1": {
+   "name": "bus",
+   "permitted_labels": [
+    "bus",
+    "vehicle"
+   ]
+  },
+  "2": {
+   "name": "car",
+   "permitted_labels": [
+    "car",
+    "vehicle"
+   ]
+  },
+  "3": {
+   "name": "human",
+   "permitted_labels": [
+    "person"
+   ]
+  },
+  "4": {
+   "name": "motorbike",
+   "permitted_labels": [
+    "motorcycle",
+    "vehicle"
+   ]
+  },
+  "5": {
+   "name": "truck",
+   "permitted_labels": [
+    "truck",
+    "vehicle"
+   ]
+  },
+  "6": {
+   "name": "van",
+   "permitted_labels": [
+    "van",
+    "vehicle"
+   ]
+  }
+ },
+ "known_limitations": [
+  "Frozen thresholds were fitted on VisDrone; this dataset is scored with them unchanged.",
+  "No tricycle class: a tricycle the annotator finds counts as unmatched.",
+  "Precision is a bound: objects the reference omits count as unmatched."
+ ]
+}
