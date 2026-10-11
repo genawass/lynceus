@@ -141,13 +141,15 @@ class Sam3Verifier:
     the verifier's blindness rather than the box's support.
     """
 
-    def __init__(self,bundle,device=None,tile_side=512,threshold=0.3,amp=True):
+    def __init__(self,bundle,device=None,tile_side=512,threshold=0.3,amp=True,prompt_batch=1):
         from ..bundle import preflight,BundleError
         self.bundle=preflight(bundle)
         declared=self.bundle['manifest'].get('dependencies',{})
         missing=[p for p in REQUIRED_DEPENDENCIES if p not in declared]
         if missing:raise BundleError('undeclared_dependency: '+','.join(missing))
         self.tile_side=tile_side;self.threshold=threshold;self.amp=amp
+        self.prompt_batch=max(1,int(prompt_batch))
+        self.stats={'vision_passes':0,'decoder_passes':0,'prompt_scorings':0,'tiles':0}
         self._requested_device=device;self._model=None
 
     def _ensure(self):
@@ -165,26 +167,78 @@ class Sam3Verifier:
         return {'device':self.device,'tile_side':self.tile_side,'threshold':self.threshold,
                 'checkpoint':self.bundle['manifest'].get('checkpoint'),
                 'coordinate_convention':'source_pixel_xyxy','prompt':'text','amp':self.amp,
+                'prompt_batch':self.prompt_batch,'vision_features_reused_across_prompts':True,
                 'independence':'shared_transformer_lineage_with_detector'}
 
+    def _expand(self,vision,count):
+        """The same tile's features presented to `count` prompts, without re-encoding the tile.
+
+        `Sam3Model.forward` reads only the FPN levels and their position encodings off the vision
+        output, so a view-expanded copy of those is the whole of what a larger prompt batch needs.
+        """
+        if count==1:return vision
+        from transformers.models.sam3.modeling_sam3 import Sam3VisionEncoderOutput
+        grow=lambda t:t.expand(count,*t.shape[1:])
+        return Sam3VisionEncoderOutput(
+            fpn_hidden_states=tuple(grow(t) for t in vision.fpn_hidden_states),
+            fpn_position_encoding=tuple(grow(t) for t in vision.fpn_position_encoding))
+
+    def _boxes_and_scores(self,output,size):
+        """Scores and boxes exactly as the processor computes them, without building the masks.
+
+        The processor's filter is score-only -- presence-weighted logits against the threshold --
+        and the masks it then resizes and binarizes change nothing about which boxes survive or
+        where they sit. A verifier reads existence and geometry, so the mask work is pure cost and
+        dropping it leaves the surviving boxes identical rather than approximate.
+        """
+        from transformers.models.sam3.image_processing_sam3 import _scale_boxes
+        scores=output.pred_logits.sigmoid()
+        if output.presence_logits is not None:scores=scores*output.presence_logits.sigmoid()
+        boxes=_scale_boxes(output.pred_boxes,[size]*scores.shape[0])
+        out=[]
+        for row,box_row in zip(scores,boxes):
+            keep=row>self.threshold
+            out.append((box_row[keep].float().cpu().tolist(),row[keep].float().cpu().tolist()))
+        return out
+
     def detect(self,image,prompts):
-        """Every detection the verifier makes, in source coordinates, one pass per tile per prompt."""
+        """Every detection the verifier makes, in source coordinates.
+
+        One vision pass per tile serves every prompt in the ontology. The tile encoder is the
+        dominant cost -- nine prompts over ten tiles cost ninety encoder passes when each prompt
+        carries its own image, and ten when they share one -- and the prompts are independent
+        queries against the same features, so sharing them changes the arithmetic rather than the
+        result. `prompt_batch` then trades VRAM for fewer decoder calls.
+        """
         self._ensure()
         import torch
         windows=plan_windows(image.width,image.height,self.tile_side)
+        phrases=list(prompts)
+        text=self._processor(text=phrases,return_tensors='pt').to(self.device)
         found=[]
         for x1,y1,x2,y2 in windows:
             view=image.crop((x1,y1,x2,y2))
-            for phrase,class_id in prompts.items():
-                inputs=self._processor(images=view,text=phrase,return_tensors='pt').to(self.device)
-                with torch.inference_mode():
-                    if self.amp and self.device=='cuda':
-                        with torch.autocast('cuda',dtype=torch.float16): output=self._model(**inputs)
-                    else: output=self._model(**inputs)
-                result=self._processor.post_process_instance_segmentation(
-                    output,threshold=self.threshold,target_sizes=[view.size[::-1]])[0]
-                for box,score in zip(result['boxes'].cpu().tolist(),result['scores'].cpu().tolist()):
-                    # The class id travels, not the phrasing: agreement must not depend on wording.
-                    found.append({'bbox_xyxy':[box[0]+x1,box[1]+y1,box[2]+x1,box[3]+y1],
-                                  'label':class_id,'score':float(score)})
+            pixels=self._processor(images=view,return_tensors='pt').to(self.device)
+            self.stats['tiles']+=1
+            with torch.inference_mode():
+                with self._autocast():
+                    vision=self._model.vision_encoder(pixels['pixel_values'])
+                self.stats['vision_passes']+=1
+                for start in range(0,len(phrases),self.prompt_batch):
+                    group=phrases[start:start+self.prompt_batch]
+                    with self._autocast():
+                        output=self._model(vision_embeds=self._expand(vision,len(group)),
+                                           input_ids=text['input_ids'][start:start+len(group)],
+                                           attention_mask=text['attention_mask'][start:start+len(group)])
+                    self.stats['decoder_passes']+=1;self.stats['prompt_scorings']+=len(group)
+                    for phrase,(boxes,scores) in zip(group,self._boxes_and_scores(output,view.size[::-1])):
+                        for box,score in zip(boxes,scores):
+                            # The class id travels, not the phrasing: agreement must not depend on wording.
+                            found.append({'bbox_xyxy':[box[0]+x1,box[1]+y1,box[2]+x1,box[3]+y1],
+                                          'label':prompts[phrase],'score':float(score)})
         return found
+
+    def _autocast(self):
+        import contextlib,torch
+        if self.amp and self.device=='cuda':return torch.autocast('cuda',dtype=torch.float16)
+        return contextlib.nullcontext()

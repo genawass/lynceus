@@ -14,8 +14,36 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lynceus.bundle import preflight  # noqa: E402
 from lynceus.pipeline import annotate  # noqa: E402
 from build_benchmark import select_images  # noqa: E402
+
+
+def load_models(args, ontology):
+    """Load each checkpoint once for the whole panel.
+
+    Three checkpoints -- detector, refiner, verifier -- cost about 57 of the 90 seconds a single
+    image takes, and `annotate` builds them from a bundle path whenever it is not handed an
+    instance. Per image that load is unavoidable; per panel it is paid once. The bundle paths are
+    still passed through so each run's manifest records what verified it.
+    """
+    from lynceus.adapters.owlv2 import Owlv2Adapter
+    adapter = Owlv2Adapter(args.bundle, device=args.device, threshold=args.threshold,
+                           ontology_id=ontology, vocabulary_id=args.vocabulary)
+    refiner = verifier = None
+    if args.refine_bundle:
+        from lynceus.adapters.sam3 import Sam3Refiner
+        refiner = Sam3Refiner(args.refine_bundle, device=args.device,
+                              **{'tile_side': args.refine_tile_side} if args.refine_tile_side else {})
+    if args.verify_bundle:
+        adapter_name = preflight(args.verify_bundle)['adapter']
+        if adapter_name != 'sam3':
+            raise SystemExit(f'reuse across images is only wired for sam3, not {adapter_name}')
+        from lynceus.adapters.sam3 import Sam3Verifier
+        verifier = Sam3Verifier(args.verify_bundle, device=args.device,
+                                prompt_batch=args.verify_prompt_batch,
+                                **{'threshold': args.verify_threshold} if args.verify_threshold else {})
+    return adapter, refiner, verifier
 
 
 def main():
@@ -37,6 +65,8 @@ def main():
     parser.add_argument('--verify-threshold', type=float)
     parser.add_argument('--refine-iou', type=float, help='agreement below which the proposed box is kept as an alternative')
     parser.add_argument('--refine-tile-side', type=int, help='source-resolution window side for refinement')
+    parser.add_argument('--verify-prompt-batch', type=int, default=1,
+                        help='prompts per verifier decoder call; 1 is exact, higher is faster and moves scores')
     parser.add_argument('--device')
     parser.add_argument('--limit', type=int, help='stop after this many images, for a timing probe')
     args = parser.parse_args()
@@ -49,6 +79,7 @@ def main():
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
+    adapter, refiner, verifier = load_models(args, mapping['ontology'])
     started = time.perf_counter()
     for index, stem in enumerate(stems, start=1):
         run_dir = out / stem
@@ -56,6 +87,7 @@ def main():
             print(f'[{index}/{len(stems)}] {stem} already present, skipped', flush=True)
             continue
         result = annotate(str(root / 'images/val' / f'{stem}.jpg'), args.bundle, str(run_dir),
+                          adapter=adapter, refiner=refiner, verifier=verifier,
                           tile_levels=args.tile_levels, tile_overlap=args.tile_overlap,
                           merge_ios=args.merge_ios, merge_iou=args.merge_iou,
                           device=args.device, threshold=args.threshold,

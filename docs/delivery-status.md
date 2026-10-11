@@ -1241,3 +1241,69 @@ SAM 3's own label is exact twice as often on VisDrone and ten times as often on 
 wrong rate; on APOCE it confuses excavators with bulldozers, dump trucks and piling machines (8 of 45
 exact). Using the verifier's label to refine a parent fallback is the obvious next measurement; it is
 not adopted here.
+
+## Measured: what a run costs, and most of it was not the models thinking
+
+[`evaluation.py`](../src/lynceus/evaluation.py) listed `operational cost` among the unimplemented
+metrics while cost had quietly become the constraint on what can be measured at all: at the rate the
+recommended configuration ran, auto-labelling enough images to train a consumer model on the output
+was a multi-day proposition, which is why no such measurement exists in this report. So the stages
+were separated before anything was made faster.
+
+Every run now records `stage_seconds` per stage, the unattributed remainder, and what the run cost
+per object it kept. A stage that did not run is absent rather than zero. One panel image, recommended
+configuration:
+
+| stage | seconds |
+|---|---|
+| verification | 17.5 |
+| discovery | 10.7 |
+| refinement | 4.4 |
+| merge and acceptance | 0.02 |
+| unattributed: three checkpoint loads, normalization, artifact writing | 57.1 |
+
+Two thirds of a single-image run was loading models. That is unavoidable per image and paid once per
+panel, so the panel runner now builds the detector, refiner and verifier once and hands them to every
+run. `annotate` refuses a reused verifier whose own threshold contradicts the one its manifest
+records, because a shared model must not be able to misreport the operating point a run claims.
+
+### The verifier encodes each tile once
+
+Nine prompts over ten tiles cost ninety encoder passes when every prompt carries its own copy of the
+image. `Sam3Model` accepts precomputed `vision_embeds`, so the tile is encoded once and every prompt
+is scored against those features: ninety vision passes become ten. The verifier also stops building
+masks, because the processor's filter is score-only -- presence-weighted logits against the threshold
+-- so resizing and binarizing masks changes neither which boxes survive nor where they sit. A test
+pins that equality against the library's own post-processing instead of asserting it.
+
+Scoring several prompts in one decoder call is available as `--verify-prompt-batch` and is not the
+default. Measured against the serial path on one image it leaves the detection count and every label
+unchanged, pairs every box at IoU 0.987 or better, and moves scores by up to 0.0054 and box edges by
+0.13 pixels. That is small, but the shipped operating points are frozen thresholds at 0.392 and
+0.461, so exactness is the default and the faster path is opt-in with its drift recorded.
+
+| verifier path, one panel image | seconds | vision passes | decoder calls | identical to serial |
+|---|---|---|---|---|
+| per prompt per tile (previous) | 51.2 | 90 | 90 | — |
+| shared tile features, `--verify-prompt-batch 1` | 18.2 | 10 | 90 | **yes** |
+| shared tile features, batch 3 | 10.5 | 10 | 30 | scores within 0.0054 |
+| shared tile features, batch 9 | 8.6 | 10 | 10 | scores within 0.0054 |
+
+### Panel cost, and why this is a cost result and not a new measurement
+
+| held-out panel, recommended configuration | before | after |
+|---|---|---|
+| wall for ten images | 579s for the verification stage alone | **424.6s for the whole pipeline** |
+| per image | | 42.5s |
+| per retained object | | 0.184s |
+| retained | 2311 | 2311 |
+| confirmed | 1252 (54.2%) | 1252 (54.18%) |
+
+The retained and confirmed counts are identical to the figures recorded above, which is the point:
+nothing about what the pipeline decides has changed. Verification is still the largest stage at
+189.3s, then discovery at 97.8s, loading and writing at 72.6s, refinement at 60.1s, merging at 4.7s.
+
+What this unblocks is the measurement that was out of reach: labelling a few hundred unannotated
+images, training a consumer model on the labels, and scoring that model against human labels. That
+prices the boxes a finite-category reference cannot adjudicate -- a real object VisDrone omitted
+raises a student's score and a false box lowers it -- without needing an exhaustive panel.

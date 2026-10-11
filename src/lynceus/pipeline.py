@@ -17,6 +17,24 @@ def peak_rss_bytes():
     return rusage.getrusage(rusage.RUSAGE_SELF).ru_maxrss*1024
 
 
+def stage_cost(timings,total_seconds,retained):
+    """What each stage cost, and what the run cost per object it kept.
+
+    One run total cannot say which stage to make cheaper, and until the stages are separated a
+    claim about dataset-scale cost is a guess. `unattributed_seconds` is the remainder -- model
+    loading, image normalization, artifact writing -- and is reported rather than distributed,
+    because spreading it over the stages would invent attribution the measurement does not have.
+
+    Cost per object is reported against retained objects, not references: the reference is not
+    available at run time, and an annotator's price is what it charges for what it emits.
+    """
+    stages={name:round(seconds,6) for name,seconds in timings.items()}
+    accounted=sum(stages.values())
+    return {'stage_seconds':stages,'unattributed_seconds':round(total_seconds-accounted,6),
+            'seconds_per_retained_object':round(total_seconds/retained,6) if retained else None,
+            'retained_objects_per_hour':round(retained*3600/total_seconds,2) if total_seconds else None}
+
+
 def render_overlay(image,objects):
     """Nonauthoritative visualization: never the bare source image."""
     canvas=image.convert('RGB');draw=ImageDraw.Draw(canvas)
@@ -438,8 +456,12 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
              merge_rounds=1,fuse_boxes_enabled=False,calibration=None,max_alternatives=8,
              refiner=None,refine_bundle=None,refine_iou=DEFAULT_REFINE_IOU,refine_tile_side=512,
              merge_labels='common-ancestor',vocabulary_id=None,
-             verifier=None,verify_bundle=None,verify_iou=0.5,verify_threshold=0.3):
+             verifier=None,verify_bundle=None,verify_iou=0.5,verify_threshold=0.3,
+             verify_prompt_batch=1):
     started=time.perf_counter()
+    # Per-stage wall time, because one total cannot say which stage to make cheaper. A stage that
+    # did not run is absent rather than zero: zero would read as free.
+    timings={}
     image,metadata=normalize_image(image_path)
     bundle=preflight(bundle_path)
     root=Path(output)
@@ -455,6 +477,7 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
             'planned_views':len(jobs),'max_alternatives':max_alternatives,'ontology':ontology['id'],'vocabulary':vocabulary_id,
             'verify_bundle':str(Path(verify_bundle).resolve()) if verify_bundle else None,
             'verify_iou':verify_iou,'verify_threshold':verify_threshold,
+            'verify_prompt_batch':verify_prompt_batch,
             'acceptance':rules,'name_ratio':name_ratio,
             'refine_bundle':str(Path(refine_bundle).resolve()) if refine_bundle else None,
             'refine_iou':refine_iou,'refine_tile_side':refine_tile_side,
@@ -471,10 +494,13 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
             adapter=Owlv2Adapter(bundle_path,device=device,threshold=threshold,ontology_id=ontology['id'],
                                  vocabulary_id=vocabulary_id)
         capabilities=adapter.capabilities() if hasattr(adapter,'capabilities') else None
+        mark=time.perf_counter()
         observations,completed,failed=discover(adapter,image,jobs)
+        timings['discovery']=time.perf_counter()-mark
         labels={c['id']:c for c in ontology['classes']}
         for obs in observations:
             if obs['label'] not in labels:raise ValueError('adapter_invalid_label')
+        mark=time.perf_counter()
         name_observations(observations,ontology,name_ratio)
         groups,representatives,merge_reasons,rounds_used=consolidate(
             observations,merge_ios,merge_iou,rounds=merge_rounds,fuse=fuse_boxes_enabled,
@@ -515,19 +541,37 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
                 'uncertainty':{**uncertainty,'reasons':reasons},
                 'evidence_refs':['evidence/candidates.jsonl','evidence/coverage.json'],'relations':[],
                 'occluded':None,'truncated':None,'flag_evidence_refs':[],'count':None,'calibrated_estimates':[]})
+        timings['merge']=time.perf_counter()-mark
         if refine_bundle is not None and refiner is None:
             from .adapters.sam3 import Sam3Refiner
             refiner=Sam3Refiner(refine_bundle,device=device,tile_side=refine_tile_side)
         if refiner is not None and objects:
             refiner_capabilities=refiner.capabilities() if hasattr(refiner,'capabilities') else None
+            mark=time.perf_counter()
             refinement=refine_objects(objects,evidence,candidates,refiner,image,refine_iou,max_alternatives)
+            timings['refine']=time.perf_counter()-mark
         if verify_bundle is not None and verifier is None:
             from .adapters.sam3 import Sam3Verifier
-            verifier=Sam3Verifier(verify_bundle,device=device,threshold=verify_threshold)
+            verifier=Sam3Verifier(verify_bundle,device=device,threshold=verify_threshold,
+                                  prompt_batch=verify_prompt_batch)
+        if verifier is not None and getattr(verifier,'threshold',verify_threshold)!=verify_threshold:
+            # A reused verifier carries its own threshold; the manifest records the argument. If the
+            # two disagree the run would claim an operating point it did not use.
+            raise ValueError('verifier_threshold_mismatch: '
+                             f'{getattr(verifier,"threshold")} loaded, {verify_threshold} declared')
         if verifier is not None and objects:
             verifier_capabilities=verifier.capabilities() if hasattr(verifier,'capabilities') else None
+            mark=time.perf_counter()
+            # A verifier reused across images keeps counting, so record this run's own passes.
+            before=dict(getattr(verifier,'stats',None) or {})
             verification=verify_objects(objects,evidence,candidates,verifier,image,ontology,vocabulary_id,verify_iou)
-        if rules is not None:assess(objects,evidence,len(jobs),rules)
+            timings['verify']=time.perf_counter()-mark
+            after=dict(getattr(verifier,'stats',None) or {})
+            if after:verification={**verification,'model_passes':{k:v-before.get(k,0) for k,v in after.items()}}
+        if rules is not None:
+            mark=time.perf_counter()
+            assess(objects,evidence,len(jobs),rules)
+            timings['accept']=time.perf_counter()-mark
         if calibration_spec is not None:
             for obj,ev in zip(objects,evidence):
                 probability=calibrated_probability(calibration_spec,ev['score'])
@@ -543,20 +587,27 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
     else:status='completed'
     search_status=status if error else ('failed' if failed else 'profile_complete')
     reason=('baseline_finished' if not failed else 'view_failures_prevent_complete_scan') if not error else error['type']
-    stage_resources={'wall_seconds':round(time.perf_counter()-started,6),'peak_rss_bytes':peak_rss_bytes(),
+    total_seconds=time.perf_counter()-started
+    stage_resources={'wall_seconds':round(total_seconds,6),'peak_rss_bytes':peak_rss_bytes(),
                      'model_calls':len(completed),'planned_views':len(jobs),'failed_views':len(failed),
                      'raw_observations':len(observations),'retained_objects':len(objects)}
-    events=[{'stage':'discovery','status':status,'error':error,'capabilities':capabilities,'resources':stage_resources},
+    cost=stage_cost(timings,total_seconds,len(objects))
+    events=[{'stage':'discovery','status':status,'error':error,'capabilities':capabilities,
+             'resources':stage_resources,'cost':{'wall_seconds':cost['stage_seconds'].get('discovery'),'model_calls':len(completed)}},
             {'stage':'verification','status':status,'summary':verification,
-             'capabilities':verifier_capabilities,'resources':stage_resources},
+             'capabilities':verifier_capabilities,'resources':stage_resources,
+             'cost':{'wall_seconds':cost['stage_seconds'].get('verify'),
+                     'model_calls':(verification or {}).get('model_passes',{}).get('decoder_passes')}},
             {'stage':'merge','status':status,'observations':len(observations),'retained':len(objects),
              'acceptance_rule':rules,
              'rounds_used':rounds_used,'box_fusion':fuse_boxes_enabled,
              'rule':{'same_label_only':True,'iou_threshold':merge_iou,
-                     'ios_threshold':merge_ios,'ios_requires_view_edge':True},'resources':stage_resources},
+                     'ios_threshold':merge_ios,'ios_requires_view_edge':True},'resources':stage_resources,
+             'cost':{'wall_seconds':cost['stage_seconds'].get('merge'),'model_calls':0}},
             {'stage':'refine','status':status,'refinement':refinement,
-             'capabilities':refiner_capabilities,'resources':stage_resources},
-            {'stage':'terminal','status':status,'reason':reason,'resources':stage_resources}]
+             'capabilities':refiner_capabilities,'resources':stage_resources,
+             'cost':{'wall_seconds':cost['stage_seconds'].get('refine'),'model_calls':None}},
+            {'stage':'terminal','status':status,'reason':reason,'resources':stage_resources,'cost':cost}]
     artifacts['events']=write_artifact(root,'events.jsonl',b'\n'.join(canonical(e) for e in events)+b'\n','application/x-ndjson')
     artifacts['candidates']=write_artifact(root,'evidence/candidates.jsonl',b'\n'.join(canonical(c) for c in candidates)+b'\n','application/x-ndjson')
     done=[j for j in jobs if j['id'] in set(completed)]
@@ -580,7 +631,7 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
     coverage_summary={'planned_jobs':len(jobs),'completed_jobs':len(completed),'failed_jobs':len(failed),
                       'route_covered_area_fraction':coverage['route_covered_area_fraction']}
     # Evidence bytes only; annotation.json and its digest sidecar are written after this point.
-    resources={**stage_resources,'artifact_bytes':sum((root/a['path']).stat().st_size for a in artifacts.values())}
+    resources={**stage_resources,'artifact_bytes':sum((root/a['path']).stat().st_size for a in artifacts.values()),**cost}
     result={'schema_version':'lynceus.annotation/1.0','run_id':run_id,'image':metadata,'policy':identity(load_policy()),'ontology':identity(ontology),'manifest_ref':'manifest.json','qualification':{'id':None,'domain':'undeclared','status':'unqualified'},'execution':{'status':status,'reason':reason,'failure_refs':['events.jsonl'] if error else []},'search':{'profile_id':profile,'status':search_status,'mandatory_planned':len(jobs),'mandatory_completed':len(completed),'mandatory_failed':len(failed),'stable_rounds':0,'coverage_ref':'evidence/coverage.json','stop_rule':{'full_image_passes':1,'tile_levels':tile_levels,'tile_overlap':tile_overlap,'merge_ios':merge_ios,'merge_iou':merge_iou,'required_stable_rounds':0}},'objects':objects,'regions':regions,'summary':summarize(objects,regions,coverage_summary,resources,calibration_record),'artifacts':artifacts}
     result=validate_annotation(result,root)
     write_artifact(root,'annotation.json',result)

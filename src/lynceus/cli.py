@@ -46,6 +46,7 @@ def build_parser():
     p.add_argument('--verify-bundle',help='bundle for an independent verifier; records per-box confirmation')
     p.add_argument('--verify-iou',type=float,default=0.5,help='overlap at which a verifier detection confirms a box')
     p.add_argument('--verify-threshold',type=float,default=0.3,help='verifier detection threshold')
+    p.add_argument('--verify-prompt-batch',type=int,default=1,help='prompts scored per decoder call; 1 is exact, higher is faster and perturbs scores by about 0.005')
     p.add_argument('--require-verification',action='store_true',help='acceptance additionally requires independent confirmation')
     p.add_argument('--accept',action='store_true',help='run the acceptance rule; without it every object stays uncertain')
     p.add_argument('--accept-score',type=float);p.add_argument('--accept-min-views',type=int)
@@ -68,6 +69,7 @@ def main(argv=None):
             ontology_id=args.ontology,vocabulary_id=args.vocabulary,acceptance=acceptance_rules(args),
             merge_rounds=args.merge_rounds,merge_labels=args.merge_labels,fuse_boxes_enabled=args.fuse,calibration=args.calibration,
             verify_bundle=args.verify_bundle,verify_iou=args.verify_iou,verify_threshold=args.verify_threshold,
+            verify_prompt_batch=args.verify_prompt_batch,
             refine_bundle=args.refine_bundle,refine_iou=args.refine_iou,refine_tile_side=args.refine_tile_side,
             **({} if args.name_ratio is None else {'name_ratio':args.name_ratio}))
         elif args.command=='resume':result=resume(args.run,args.output)
