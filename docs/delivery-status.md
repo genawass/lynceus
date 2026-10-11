@@ -1367,3 +1367,44 @@ the held-out panel in the recommended configuration:
 Both precision and coverage are better than the pre-refinement curve at every comparable point
 (0.646 against 0.597 and 0.158 against 0.128 at score 0.10), and the joint gate is as far away as
 before: precision reaches 1.0 on thirteen boxes and coverage has collapsed by then.
+
+## Measured: a review order, and which half of a reviewer's job it helps with
+
+Every retained box already carries five uncertainty dimensions, a detector score, a view count, a
+truncation flag and -- where a verifier ran -- a confirmation and the overlap that produced it. None
+of it reached a person in a usable order, so a reviewer with time for a hundred of two thousand
+boxes had no way to choose them. [`lynceus.review`](../src/lynceus/review.py) converts that recorded
+evidence into one, worst first, and `lynceus review RUN --limit k` emits it. The rule is declared
+rather than fitted, because a ranking tuned against the panel it is then measured on measures the
+tuning: unresolved dimensions first, then unconfirmed before confirmed, then ascending confirming
+overlap, detector score and area.
+
+Measuring it needs the two populations kept apart. A box found at IoU 0.50 but not at 0.75 is a
+**determined correction**: the object is real, the geometry is wrong, and no assumption about
+unannotated objects enters. A box matching no reference is **undecided** -- a real object VisDrone
+omits looks exactly like a false positive -- so surfacing those sooner is worth something to a
+reviewer and is not evidence of error. The bar is the detector's score ascending, which is free.
+
+Held-out panel, 2311 retained boxes: 374 found at IoU 0.75, 250 found only at 0.50, 1687 matching no
+reference.
+
+| boxes reviewed | determined corrections, review order | by score | undecided boxes, review order | by score |
+|---|---|---|---|---|
+| 50 | 0 | 0 | 50 | 49 |
+| 100 | 0 | 2 | 100 | 97 |
+| 200 | 6 | 9 | 194 | 190 |
+| 400 | **35** | 14 | 345 | **383** |
+| 800 | **80** | 37 | 679 | **748** |
+
+The two orders are good at different jobs, and that is the result. For fixing the geometry of real
+objects the review order reaches 2.2 to 2.5 times as many corrections per budget from 400 boxes on.
+For surfacing boxes that match nothing the score is better, which is unsurprising since a low score
+is what an unmatched box usually has -- and that curve cannot establish that any of those boxes is
+false, so it ranks suspicion rather than error.
+
+Below 200 boxes neither order finds corrections, because the first two hundred boxes in both are
+almost entirely undecided ones. A reviewer whose budget is that small is not fixing boxes under
+either order; they are auditing existence.
+
+What this does not measure is a correction loop, because none exists: nothing here writes a
+reviewer's decision back. The order is the half of WP-12 that can be built and measured without one.

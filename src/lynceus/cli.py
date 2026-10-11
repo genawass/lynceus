@@ -8,6 +8,7 @@ from .vocabulary import available_vocabularies
 from .contracts import annotation_schema,validate_annotation
 from .evaluation import evaluate_benchmark
 from .pipeline import annotate,resume
+from .review import review_run
 
 
 def acceptance_rules(args):
@@ -55,6 +56,8 @@ def build_parser():
     p.add_argument('--accept-verifier-boundary-iou',type=float,
                    help='withhold boundary support where the confirming box overlaps this box by less than this')
     p=sub.add_parser('resume');p.add_argument('run');p.add_argument('--output')
+    p=sub.add_parser('review');p.add_argument('run');p.add_argument('--limit',type=int,
+        help='return only the first k boxes, which is the review budget')
     p=sub.add_parser('evaluate');p.add_argument('--benchmark',required=True);p.add_argument('--bootstrap-replicates',type=int,default=10000);p.add_argument('--seed',type=int,default=0)
     return parser
 
@@ -76,6 +79,7 @@ def main(argv=None):
             refine_bundle=args.refine_bundle,refine_iou=args.refine_iou,refine_tile_side=args.refine_tile_side,
             **({} if args.name_ratio is None else {'name_ratio':args.name_ratio}))
         elif args.command=='resume':result=resume(args.run,args.output)
+        elif args.command=='review':result=review_run(args.run,args.limit)
         else:result=evaluate_benchmark(json.loads(Path(args.benchmark).read_text()),args.bootstrap_replicates,args.seed)
         print(json.dumps(result,indent=2,allow_nan=False))
         if result.get('execution',{}).get('status') in ['failed','interrupted']:return 4

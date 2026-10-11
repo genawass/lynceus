@@ -18,37 +18,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lynceus.evaluation import match  # noqa: E402
 from lynceus.pipeline import assess, ACCEPTANCE_DEFAULTS  # noqa: E402
 from lynceus.policy import load_ontology  # noqa: E402
+from lynceus.review import evidence_from_run  # noqa: E402
 from build_benchmark import references, select_images  # noqa: E402
 
 
 def rebuild_evidence(result, candidates, ontology):
-    """Recover each retained object's evidence from the run's own candidate store.
-
-    Retained candidates are written in object order and the verification stage pairs them that way,
-    so the replay pairs them that way too. Keying on geometry instead was wrong as soon as
-    refinement existed: a refined object carries the refiner's box while its retained candidate
-    still carries the proposal, every lookup missed, and every object replayed as an unverified
-    zero-score detection. A length mismatch is therefore an error rather than something to paper
-    over with a fallback.
-    """
-    useful = {c['id']: c['useful'] for c in ontology['classes']}
-    leads = [c for c in candidates if c['disposition'] == 'retained']
-    if len(leads) != len(result['objects']):
-        raise SystemExit(f'{len(leads)} retained candidates for {len(result["objects"])} objects; '
-                         'the run cannot be replayed')
-    evidence = []
-    for obj, lead in zip(result['objects'], leads):
-        verification = lead.get('verification') or {}
-        evidence.append({'score': lead['model_score'],
-                         'views': len(lead.get('merged_views', [])) or 1,
-                         'view_edge': bool(lead['view_edge']),
-                         'alternatives': obj['alternative_boxes'],
-                         'useful': useful.get(obj['label']['id'], False),
-                         # Verification travels too, so a sweep can re-apply rules that read it.
-                         'verified': verification.get('confirmed'),
-                         'verifier_score': verification.get('verifier_score'),
-                         'verifier_overlap': verification.get('overlap')})
-    return evidence
+    """The library's replay pairing, kept under this name for the scripts that already call it."""
+    return evidence_from_run(result, candidates, ontology)
 
 
 def main():
