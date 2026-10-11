@@ -268,6 +268,9 @@ def verify_objects(objects,evidence,candidates,verifier,image,ontology,vocabular
                 'overlap':round(best_iou,6) if best else None,
                 'label_agrees':bool(best and best['label']==obj['label']['id'])}
         ev['verified']=record['confirmed'];ev['verifier_score']=record['verifier_score']
+        # The overlap that confirmed the box is also the only independent reading of its extent, so
+        # it travels into evidence rather than stopping at the candidate record.
+        ev['verifier_overlap']=record['overlap']
         candidate['verification']=record
         if not record['confirmed']:
             obj['uncertainty']['reasons'].append('unconfirmed_by_independent_model')
@@ -395,7 +398,7 @@ def calibrated_probability(spec,value):
 
 
 ACCEPTANCE_DEFAULTS={'score':0.5,'min_views':2,'boundary_iou':0.8,'granularity_ios':0.7,
-                     'require_verification':False}
+                     'require_verification':False,'verifier_boundary_iou':None}
 
 
 def assess(objects,evidence,planned_views,rules):
@@ -433,6 +436,15 @@ def assess(objects,evidence,planned_views,rules):
             states['boundary']='unresolved';reasons.append('view_edge_truncation_unresolved')
         elif ev['alternatives'] and min(iou(obj['bbox_xyxy'],a) for a in ev['alternatives'])<rules['boundary_iou']:
             states['boundary']='unresolved';reasons.append('multi_view_boundary_disagreement')
+        elif (rules.get('verifier_boundary_iou') is not None and ev.get('verifier_overlap') is not None
+              and ev['verifier_overlap']<rules['verifier_boundary_iou']):
+            # Alternatives come from this detector's own views, so boundary support currently rests
+            # on one model agreeing with itself. Where a verifier confirmed the box, its own box is
+            # a second reading of the same extent, and disagreement there is boundary uncertainty by
+            # the same argument that makes multi-view disagreement one. It can only withhold
+            # support: the verifier's geometry never replaces the box, because refinement is the
+            # stage entitled to move geometry and it ran against pixels rather than against a vote.
+            states['boundary']='unresolved';reasons.append('verifier_extent_disagreement')
         else:
             states['boundary']='supported'
         # Count is not estimated: an `instance` is one object by construction, and no group

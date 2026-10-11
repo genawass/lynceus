@@ -15,6 +15,7 @@ def acceptance_rules(args):
     if not args.accept:return None
     given={'score':args.accept_score,'min_views':args.accept_min_views,
            'boundary_iou':args.accept_boundary_iou,'granularity_ios':args.accept_granularity_ios,
+           'verifier_boundary_iou':args.accept_verifier_boundary_iou,
            'require_verification':args.require_verification or None}
     return {k:v for k,v in given.items() if v is not None}
 
@@ -51,6 +52,8 @@ def build_parser():
     p.add_argument('--accept',action='store_true',help='run the acceptance rule; without it every object stays uncertain')
     p.add_argument('--accept-score',type=float);p.add_argument('--accept-min-views',type=int)
     p.add_argument('--accept-boundary-iou',type=float);p.add_argument('--accept-granularity-ios',type=float)
+    p.add_argument('--accept-verifier-boundary-iou',type=float,
+                   help='withhold boundary support where the confirming box overlaps this box by less than this')
     p=sub.add_parser('resume');p.add_argument('run');p.add_argument('--output')
     p=sub.add_parser('evaluate');p.add_argument('--benchmark',required=True);p.add_argument('--bootstrap-replicates',type=int,default=10000);p.add_argument('--seed',type=int,default=0)
     return parser

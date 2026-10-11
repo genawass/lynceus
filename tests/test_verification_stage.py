@@ -88,3 +88,34 @@ def test_verifier_is_asked_with_the_class_ids_not_the_phrasing(staged):
 def _fresh(staged):
     image, bundle, output = staged
     return image, bundle, output.parent / 'strict-run'
+
+
+def test_the_confirming_overlap_reaches_the_evidence_it_is_judged_from(staged):
+    """A confirmation records how well the two boxes agreed, not only that they did."""
+    import json as _json
+    _, _, output = staged
+    run(staged)
+    records = [_json.loads(l) for l in (output / 'evidence/candidates.jsonl').read_text().splitlines()]
+    confirmed = next(r['verification'] for r in records
+                     if r.get('verification') and r['verification']['confirmed'])
+    assert confirmed['overlap'] >= .5
+
+
+def test_verifier_extent_disagreement_withholds_boundary_support(staged):
+    """The verifier's own box is a second reading of extent, and may only withhold support."""
+    result = run(staged, acceptance={'score': .1, 'min_views': 1, 'verifier_boundary_iou': .99})
+    confirmed = next(o for o in result['objects']
+                     if 'confirmed_by_independent_model' in o['uncertainty']['reasons'])
+    assert confirmed['uncertainty']['boundary'] == 'unresolved'
+    assert 'verifier_extent_disagreement' in confirmed['uncertainty']['reasons']
+    assert confirmed['status'] == 'uncertain'
+    # The geometry stays the detector's: a vote never moves a box.
+    assert confirmed['bbox_xyxy'] == [2, 2, 44, 44]
+
+
+def test_an_agreeing_verifier_box_leaves_boundary_support_alone(staged):
+    result = run(staged, acceptance={'score': .1, 'min_views': 1, 'verifier_boundary_iou': .5})
+    confirmed = next(o for o in result['objects']
+                     if 'confirmed_by_independent_model' in o['uncertainty']['reasons'])
+    assert confirmed['uncertainty']['boundary'] == 'supported'
+    assert 'verifier_extent_disagreement' not in confirmed['uncertainty']['reasons']

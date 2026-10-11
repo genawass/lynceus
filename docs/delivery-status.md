@@ -1307,3 +1307,63 @@ What this unblocks is the measurement that was out of reach: labelling a few hun
 images, training a consumer model on the labels, and scoring that model against human labels. That
 prices the boxes a finite-category reference cannot adjudicate -- a real object VisDrone omitted
 raises a student's score and a false box lowers it -- without needing an exhaustive panel.
+
+## Measured: the verifier's geometry as boundary evidence — it does not beat the score
+
+Boundary support rested on the detector agreeing with itself: the alternatives a box is checked
+against are that detector's other views of the same object. Where a verifier confirms a box, the
+overlap that confirmed it is an independent reading of the same extent, so disagreement there is
+boundary uncertainty by the argument that already makes multi-view disagreement one. The rule is
+implemented as `--accept-verifier-boundary-iou`, withholds support and never moves a box, because
+refinement is the stage entitled to change geometry and it does so against pixels rather than
+against a vote.
+
+Re-applied to the held-out panel's recorded evidence, requiring confirmation at every row so only
+the extent rule varies, against the bar any remover has to clear -- the detector's own score
+removing the same number of boxes:
+
+| `verifier_boundary_iou` | accepted | at .50 | at .75 | at .85 | precision at .75 | score baseline of the same size | its matches at .75 |
+|---|---|---|---|---|---|---|---|
+| none | 227 | 163 | 123 | 92 | 0.5419 | — | — |
+| 0.6 | 221 | 163 | 123 | 92 | 0.5566 | 0.105 → 218 | 123 |
+| 0.7 | 211 | 160 | 123 | 92 | 0.5829 | 0.115 → 211 | 122 |
+| 0.8 | 193 | 152 | 120 | 90 | 0.6218 | 0.130 → 192 | 121 |
+| 0.9 | 155 | 137 | 112 | 89 | 0.7226 | 0.170 → 155 | 115 |
+
+Read alone the rule looks good: at 0.7 it removes sixteen accepted boxes and loses nothing at IoU
+0.75 or 0.85, lifting precision from 0.542 to 0.583 at unchanged coverage. Read against the
+baseline it is a wash -- raising the score to 0.115 keeps the same 211 boxes and 122 matches instead
+of 123 -- and by 0.9 it is worse than the score, 112 matches against 115 at an identical accepted
+count. So a second model's extent reading is not a better pruner than the number the detector
+already emits, which is the same outcome TTN reached by a different route.
+
+It is kept, off by default, for the reason D42 kept refinement unconditional: the rule is honest
+evidence about extent and a consumer may want it, but it is not an improvement and is not presented
+as one.
+
+### A replay bug this found, and what it invalidates
+
+`rebuild_evidence` keyed each object's evidence by its box geometry. Refinement moves that geometry
+while the retained candidate still carries the proposal, so after refinement every lookup missed and
+every object replayed as an unverified zero-score detection -- the first sweep returned zero accepted
+boxes at every operating point, which is what made it visible. Retained candidates are written in
+object order and the verification stage already pairs them that way, so the replay now pairs them
+that way too and refuses a run whose counts disagree rather than falling back.
+
+The risk-versus-coverage table recorded earlier under WP-09 predates refinement, so its lookups did
+match and its numbers stand. Any sweep run over refined runs before this fix did not. Recomputed on
+the held-out panel in the recommended configuration:
+
+| acceptance score | accepted | correct | precision | useful coverage |
+|---|---|---|---|---|
+| 0.10 | 175 | 113 | 0.646 | 0.158 |
+| 0.20 | 122 | 96 | 0.787 | 0.134 |
+| 0.30 | 93 | 85 | 0.914 | 0.119 |
+| 0.40 | 54 | 52 | 0.963 | 0.073 |
+| 0.50 | 13 | 13 | 1.000 | 0.018 |
+| 0.70 | 2 | 2 | 1.000 | 0.003 |
+| 0.80+ | 0 | 0 | undefined | 0.000 |
+
+Both precision and coverage are better than the pre-refinement curve at every comparable point
+(0.646 against 0.597 and 0.158 against 0.128 at score 0.10), and the joint gate is as far away as
+before: precision reaches 1.0 on thirteen boxes and coverage has collapsed by then.
