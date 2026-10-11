@@ -1,0 +1,72 @@
+{
+  "id": "visdrone-student-mAP-v1",
+  "frozen": true,
+  "declared_before_any_label_was_produced": true,
+  "question": "What is a model trained on these auto-labels worth, against the same model trained on human labels of the same images?",
+  "why": "Precision against a finite-category reference is a bound: an unmatched box is either a real object VisDrone omits or a false positive, and no further verifier distinguishes them. A downstream model does not need to. A real-but-unannotated box raises its score and a false box lowers it, so training prices exactly the population the reference cannot adjudicate. The published auto-labelling claim this tests is that auto-labels reach 90-95% of human-label downstream performance, and that downstream performance peaks at moderate verifier thresholds rather than high ones.",
+  "reference_root": "/home/genadiy/data/VisDroneMerged",
+  "ontology": "aerial-traffic-strict-v2",
+  "labelling_configuration": {
+    "detector": "owlv2-large-patch14-ensemble",
+    "threshold": 0.1,
+    "tile_levels": 1,
+    "refiner": "sam3",
+    "verifier": "sam3",
+    "verify_threshold": 0.3,
+    "verify_prompt_batch": 1,
+    "note": "the recommended configuration, unchanged; stricter verifier thresholds are applied afterwards to the recorded verifier score, so one labelling pass serves every threshold arm"
+  },
+  "train_slice": {
+    "count": 200,
+    "seed": 11,
+    "selection_rule": "stems of train.txt whose VisDrone sequence prefix (before the first underscore) does not occur in val.txt, sorted, then random.Random(11).sample(pool, 200), sorted",
+    "leakage_rule": "sequence-level exclusion against val: frames of one sequence are near duplicates, so a shared sequence would put val content in training under both arms and flatter the auto arm by the same amount it flatters the human arm, which is still a false comparison"
+  },
+  "evaluation": {
+    "split": "val.txt",
+    "images": 548,
+    "labels": "the dataset's own human labels",
+    "metrics": ["mAP50", "mAP50-95", "precision", "recall"],
+    "reported_as": "the auto arm as a fraction of the human arm"
+  },
+  "class_mapping": {
+    "rule": "the dataset's own three-class convention, verified box-for-box against labels/{split} on 60 sampled images before any arm was built",
+    "visdrone_to_dataset": {"1": "person", "2": "person", "4": "car", "5": "car", "6": "longvehicle", "9": "longvehicle"},
+    "visdrone_dropped": [0, 3, 7, 8, 10, 11],
+    "dropped_meaning": "ignored regions, bicycle, tricycle, awning-tricycle, motor and others are unlabelled in this layout, so they are background for the human arm too",
+    "ontology_to_dataset": {"person": "person", "car": "car", "van": "car", "truck": "longvehicle", "bus": "longvehicle"},
+    "ontology_dropped": ["motorcycle", "bicycle", "tricycle", "unknown_object", "stuff", "entity"],
+    "ontology_dropped_reason": "emitting a class the human arm leaves as background would penalise the auto arm for labelling what the reference declines to label, which measures the convention and not the labels"
+  },
+  "parent_fallback_policies": {
+    "why": "conservative naming emits the parent `vehicle` on 64.7% of matched boxes on the held-out panel, and `vehicle` has no single counterpart among car and longvehicle. How that fallback is resolved is therefore a declared label policy and not an implementation detail.",
+    "drop": "boxes labelled `vehicle` are omitted, so only exactly-named boxes train",
+    "verifier_label": "a `vehicle` box takes the verifier's own label where that label maps, and is omitted otherwise; this is the parent-refinement measurement that was flagged as the obvious next step and is priced here rather than asserted",
+    "modal": "every `vehicle` box becomes `car`, the modal class, which is the prior a labeller with no further evidence would use"
+  },
+  "arms": [
+    {"id": "human", "labels": "the dataset's own human labels for the same 200 images"},
+    {"id": "auto-unfiltered-verifier_label", "verify_threshold": null, "policy": "verifier_label"},
+    {"id": "auto-0.300-verifier_label", "verify_threshold": 0.3, "policy": "verifier_label"},
+    {"id": "auto-0.392-verifier_label", "verify_threshold": 0.392, "policy": "verifier_label"},
+    {"id": "auto-0.461-verifier_label", "verify_threshold": 0.461, "policy": "verifier_label"},
+    {"id": "auto-0.392-drop", "verify_threshold": 0.392, "policy": "drop"},
+    {"id": "auto-0.392-modal", "verify_threshold": 0.392, "policy": "modal"}
+  ],
+  "student": {
+    "architecture": "yolo11n",
+    "weights": "COCO-pretrained yolo11n.pt, staged locally",
+    "imgsz": 960,
+    "epochs": 80,
+    "batch": 8,
+    "seeds": [1],
+    "identical_across_arms": "images, image count, architecture, weights, hyperparameters, seed and the val split; only the training labels differ",
+    "additional_seeds_rule": "further seeds are added to every arm or to none, so a seed is never spent on the arm that happens to be ahead"
+  },
+  "limits": [
+    "the student is scored against the same three-class human labels, so it measures consumer utility under VisDrone's conventions and not truth; a real object this dataset never labels still counts against the arm that labels it",
+    "200 images and one architecture is a direction, not a gate, and VisDrone remains outside assumption A4",
+    "ultralytics has no ignore-region support, so a region this pipeline records as unsearched or unresolved trains as background; the export writes those regions to a sidecar and the count is reported rather than hidden",
+    "COCO-pretrained initialisation means both arms start from a model that has seen external data; the comparison between arms is unaffected because it is identical for both"
+  ]
+}
