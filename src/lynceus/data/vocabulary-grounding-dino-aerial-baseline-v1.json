@@ -1,0 +1,19 @@
+{
+  "id": "grounding-dino-aerial-baseline-v1",
+  "version": "1.0",
+  "adapter": "grounding-dino",
+  "ontology": "aerial-traffic-strict-v2",
+  "derivation": "The ontology's canonical names, unchanged, so the phrase grounder's prompt path is recorded rather than implicit. Separate from the OWLv2 and SAM 3 vocabularies under D56: a CLIP-style text tower, a presence head and a phrase grounder do not respond alike, and Grounding DINO in particular consumes a period-separated phrase list and returns spans over it, so its prompts must be single lowercase noun phrases that survive span extraction. This is the baseline, fitted on nothing; a searched vocabulary for this adapter would be fitted on development data only and frozen before the held-out panel, per D57.",
+  "fitted_on": null,
+  "prompts": {
+    "person": "person",
+    "vehicle": "vehicle",
+    "car": "car",
+    "van": "van",
+    "truck": "truck",
+    "bus": "bus",
+    "motorcycle": "motorcycle",
+    "bicycle": "bicycle",
+    "tricycle": "tricycle"
+  }
+}

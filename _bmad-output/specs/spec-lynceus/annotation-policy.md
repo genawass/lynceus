@@ -43,6 +43,19 @@ Use a versioned local ontology with stable IDs, canonical names, synonyms, and b
 
 Choose the most specific general label supported by the crop and context. Do not require species, brand, material, or functional identity that the pixels cannot establish. Fall back to a supported broader class. If no useful class is supported, use the reserved `unknown_object` ID and preserve the instance as uncertain. Generic `object`/`entity` and unknown labels do not count toward useful-label coverage.
 
+Two classes scoring highly on one region are not necessarily competing to describe it. A person on
+a motorcycle is two entities the policy counts separately, and a box drawn around the rider contains
+both, so a detector scoring `person` and `motorcycle` on that region is reporting what is there
+rather than hesitating between two readings. Treating that as a class ambiguity and falling back to
+a broader label -- or, where none is useful, to `unknown_object` -- discards a supported class to
+resolve a conflict that does not exist. It is the same error as letting containment imply identity,
+which this policy already forbids.
+
+An ontology therefore declares which of its classes can co-occur in one region. Where the competing
+pair is a declared co-occurrence, no fallback applies: the stronger reading is emitted and the other
+is retained as an alternative, because both may be true of that region. The fallback remains for
+genuinely exclusive pairs, where one region cannot be both things at once.
+
 Two views of one instance may disagree about its class without either being uncertain. Conservative naming runs per observation and cannot reach that case: each view had a clear winner and nothing to fall back from, so the disagreement exists only across views. Where such views describe the same instance, the most specific claim they jointly support is their common ancestor, and they are reconciled under it when that ancestor is a useful class. Where the ancestor is not useful they remain separate objects, and `unknown_object` never merges into a class, because it asserts that no useful class is supported and folding it into one would manufacture a claim no view made.
 
 An ontology extension needs a versioned change and a compatible evaluation mapping; it cannot be invented per image. The evaluator declares which broader labels are acceptable per reference class before test predictions are seen. Matching an animal to “entity” cannot satisfy label correctness.

@@ -12,7 +12,7 @@ The specification retains the goal of complete reference annotations while makin
 
 ## Implemented slice
 
-[Runnable offline annotation foundation](_bmad-output/implementation-artifacts/spec-offline-foundation.md): policy/ontology, native schema and cross-field invariants, image normalization, local bundle preflight, a conservative OWLv2 baseline adapter, immutable artifacts with safe resume, and independent-prediction evaluation. Scope and remaining work are tracked in [delivery status](docs/delivery-status.md); measured environment facts are in [feasibility](docs/feasibility.md). The [WeDetect versus OWLv2 decision](docs/model-selection.md) defines the next discovery-model experiment.
+[Runnable offline annotation foundation](_bmad-output/implementation-artifacts/spec-offline-foundation.md): policy/ontology, native schema and cross-field invariants, image normalization, local bundle preflight, a conservative OWLv2 baseline adapter, immutable artifacts with safe resume, and independent-prediction evaluation. Scope and remaining work are tracked in [delivery status](docs/delivery-status.md); measured environment facts are in [feasibility](docs/feasibility.md). The [autolabel quality strategy](docs/autolabel-strategy.md) compares zero-shot, domain-adapted, decoupled, semi-supervised, verifier-cascade, and agentic directions; the [WeDetect versus OWLv2 decision](docs/model-selection.md) defines the next discovery-model experiment within that strategy.
 
 ## Install and run
 
@@ -30,6 +30,7 @@ python -m pytest
 | `lynceus annotate IMAGE --bundle PATH --output DIR` | Run discovery into a new run directory (see tiling below) |
 | `lynceus annotate ... --refine-bundle PATH` | Refine boundaries against pixels with a second model; off unless named |
 | `lynceus resume RUN [--output DIR]` | Re-validate a run; continue an interrupted one into a new directory |
+| `lynceus review RUN [--limit k]` | Order that run's retained boxes worst first for human review; runs no model |
 | `lynceus evaluate --benchmark FILE` | Score recorded independent predictions; never grants qualification |
 
 ### Tiled discovery
@@ -70,6 +71,33 @@ Labels resolve against a versioned ontology, never free text. `lynceus policy` l
 
 The prompt list is the ontology's useful classes, so ontology choice is also prompt-set choice: the detector scores all queries competitively, and irrelevant classes both waste compute and steal probability mass from valid detections. A domain ontology must be **declared before measurement** under assumption A8 — selecting classes after seeing results is the dataset-level prompt optimization the contract forbids. Changing ontology changes the qualification identity and invalidates any qualification tied to the previous one.
 
+### What a run costs
+
+Every run records per-stage wall time, the unattributed remainder, and seconds per retained object,
+because one total cannot say which stage to make cheaper. On one 1360x765 panel image in the
+recommended configuration: verification 17.5s, discovery 10.7s, refinement 4.4s, merge and
+acceptance 0.02s, and 57.1s loading three checkpoints. Loading is unavoidable per image and paid
+once per panel, so [`run_panel.py`](examples/visdrone/run_panel.py) and
+[`label_train_slice.py`](examples/visdrone/label_train_slice.py) build the models once and hand them
+to every run; the whole held-out panel then takes 424.6s, 42.5s per image, 0.184s per retained
+object.
+
+The verifier encodes each tile once and scores every prompt against those features, so nine prompts
+over ten tiles cost ten encoder passes rather than ninety, and it skips the mask work its score-only
+filter never reads. `--verify-prompt-batch k` scores k prompts per decoder call, which is faster
+again and moves scores by about 0.005; it is off by default because the shipped operating points are
+frozen thresholds.
+
+### Reviewing a run
+
+`lynceus review` turns the recorded evidence into an order rather than a verdict: most unresolved
+dimensions first, then unconfirmed before confirmed, then ascending confirming overlap, detector
+score and area. The rule is declared, not fitted. Measured against ascending detector score on the
+held-out panel it reaches 2.2 to 2.5 times as many *determined* corrections -- a real object whose
+box is wrong -- per review budget from 400 boxes on, while the score surfaces more boxes that match
+no reference at all. Both are reported in [delivery status](docs/delivery-status.md), because those
+are different halves of a reviewer's job and only the first is a measurement.
+
 ### Acceptance
 
 Without `--accept` every object stays `uncertain` with all five uncertainty dimensions `not_assessed`: the discovery routes alone produce unverified proposals, and the contract forbids presenting those as supported. `--accept` runs a frozen rule that marks a dimension `supported` only where a check ran and passed:
@@ -82,9 +110,31 @@ Without `--accept` every object stays `uncertain` with all five uncertainty dime
 | `count` | the object is an `instance`, where the count is 1 by construction rather than inferred from density |
 | `granularity` | no larger retained object contains it beyond `--accept-granularity-ios`; otherwise recorded as `possible_part_of:<id>` |
 
+`--accept-verifier-boundary-iou` additionally withholds boundary support where the box that
+confirmed an object overlaps it by less than that, since a confirming box is an independent reading
+of extent while `alternative_boxes` are this detector's own other views. It is off by default
+because it does not beat the detector's score as a pruner: measured at an identical accepted-set
+size it is a wash at 0.7 and worse at 0.9.
+
 An object is `accepted` only when all five are supported and the class is useful, which is what `output-contract.md` requires. Model scores are raw detector outputs: a threshold on one is a declared rule, never a probability of correctness, and no probability field is emitted anywhere. Agreement across views is one checkpoint looking twice — evidence that a detection reproduces, not independent confirmation — and the reason codes distinguish `reproduced_in_N_views` from `single_view_schedule`.
 
 [`examples/visdrone/risk_coverage.py`](examples/visdrone/risk_coverage.py) sweeps the acceptance threshold and reports error against retained useful coverage at every operating point, including the all-abstention point where precision is undefined rather than perfect. It re-applies rules to evidence already recorded, so it costs no inference.
+
+### Recommended configuration
+
+Measured on two VisDrone panels, the configuration that is best on every quantity the reference can
+adjudicate is the co-occurrence ontology with boundary refinement and the baseline prompt
+vocabulary:
+
+```sh
+lynceus annotate IMAGE --bundle owlv2.json --output run/ \
+  --tile-levels 1 --ontology aerial-traffic-strict-v2 --refine-bundle sam3.json
+```
+
+Refinement is not on by default because the refiner bundle is deployment-specific. The shipped
+`owlv2-aerial-searched-v2` vocabulary is **not** recommended: it raises precision against a
+finite-category reference by removing boxes that reference cannot adjudicate, while losing recall,
+tight-threshold matches and useful-label coverage that it can. See [delivery status](docs/delivery-status.md).
 
 ### Exit codes
 
@@ -179,6 +229,35 @@ python examples/visdrone/refine_effect.py --runs runs/shipped --refined refined.
 ```
 
 `--crop-margin` refines each box inside its own source-resolution crop, which is what the architecture asks for; `--whole-image` refines against one pass over the full view instead. The difference matters on small objects: a full-view pass resizes the image to 1024 on its longest side, so a twelve-pixel object arrives at about six pixels. Both modes are kept so the comparison is a measurement rather than an assertion.
+
+### Training a consumer model on the labels
+
+Precision against VisDrone is a bound: an unmatched box is either a real object the dataset omits or
+a false positive, and no further verifier separates them. A model trained on the labels does not
+need them separated, because a real omitted object raises its score and a false box lowers it.
+[`student-protocol.json`](examples/visdrone/student-protocol.json) freezes that experiment before
+any label exists -- a 200-image train slice with sequence-level leakage exclusion, the dataset's own
+three-class mapping verified box-for-box against its label files, and one arm per verifier threshold
+and parent-fallback policy.
+
+```sh
+python examples/visdrone/label_train_slice.py --bundle BUNDLE --refine-bundle sam3.json   --verify-bundle sam3.json --out runs/slice
+python examples/visdrone/export_students.py --runs runs/slice --out arms/
+python examples/visdrone/train_students.py --arms arms/ --weights yolo11n.pt --out students.json
+python examples/visdrone/student_report.py --results students.json --export arms/export.json
+```
+
+Measured on two seeds: auto-labels reach **0.911 of human downstream mAP50** and 0.891 of mAP50-95
+in the best arm. Verification is worth 0.029 of mAP50 against a seed spread of 0.002, and the fitted
+threshold 0.392 beats the stricter 0.461, so a threshold that improves the label-precision *bound*
+made the trained model worse. How the parent fallback `vehicle` is resolved matters more than the
+threshold: dropping those boxes costs 0.46 of human performance, the modal class destroys
+`longvehicle`, the verifier's label keeps it, and retrieval over a bank of human-labelled crops
+([`retrieval_labels.py`](examples/visdrone/retrieval_labels.py)) is best overall.
+
+Every arm sees the same images, architecture, weights, hyperparameters and seed, so what moves
+between arms is the labels. The export carries no ignore semantics into the trainer, so a region
+this pipeline records as unresolved trains as background and the sidecar counts them.
 
 ## Maintaining the contract
 

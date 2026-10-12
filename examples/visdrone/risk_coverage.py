@@ -18,25 +18,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lynceus.evaluation import match  # noqa: E402
 from lynceus.pipeline import assess, ACCEPTANCE_DEFAULTS  # noqa: E402
 from lynceus.policy import load_ontology  # noqa: E402
+from lynceus.review import evidence_from_run  # noqa: E402
 from build_benchmark import references, select_images  # noqa: E402
 
 
 def rebuild_evidence(result, candidates, ontology):
-    """Recover each retained object's evidence from the run's own candidate store."""
-    useful = {c['id']: c['useful'] for c in ontology['classes']}
-    leads = {}
-    for c in candidates:
-        if c['disposition'] == 'retained':
-            leads[tuple(round(v, 3) for v in c['bbox_xyxy'])] = c
-    evidence = []
-    for obj in result['objects']:
-        lead = leads.get(tuple(round(v, 3) for v in obj['bbox_xyxy']))
-        evidence.append({'score': lead['model_score'] if lead else 0.0,
-                         'views': len(lead.get('merged_views', [])) or 1 if lead else 1,
-                         'view_edge': bool(lead['view_edge']) if lead else True,
-                         'alternatives': obj['alternative_boxes'],
-                         'useful': useful.get(obj['label']['id'], False)})
-    return evidence
+    """The library's replay pairing, kept under this name for the scripts that already call it."""
+    return evidence_from_run(result, candidates, ontology)
 
 
 def main():

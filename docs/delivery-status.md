@@ -29,8 +29,11 @@ The next proposal-model experiment is frozen in [WeDetect and OWLv2 model select
 | WP-06 multiscale discovery | **Partial.** Frozen full-frame plus overlapping source-resolution tile planner, cross-view merging on intersection-over-smaller, union evidence store with per-candidate lineage, route coverage manifest | Class-independent proposals, semantic inventory, concept and exemplar routes; locked ablation on an adequate panel |
 | WP-08 conservative naming | **Partial.** Per-class score distributions from the adapter, relative runner-up comparison, broader-supported-class fallback, `unknown_object` when no useful ancestor exists, alternatives retained | Crop and context re-interpretation, synonym normalisation, prompt-anchoring controls |
 | WP-09 evidence assessment | **Partial.** Per-dimension assessment under frozen rules, explicit acceptance, risk-versus-coverage sweep | Externally calibrated event estimates, ancestry metadata, independent verification |
-| WP-07, WP-10 | Not delivered | Instance graph and boundary refinement, omission audits, saturation |
-| WP-11–13 | Not delivered in this foundation slice | Training ignore-mask integration, human-label audit, detector pseudo-reference comparison |
+| WP-07 boundary refinement | **Partial.** Box-prompted refinement against source-resolution pixels as a pipeline stage, proposed and refined geometry both recorded, extent disagreement flagged and the proposed box retained as an alternative | Instance graph, part/group reconciliation, alternative masks |
+| WP-10 omission audits | Not delivered | Blind rediscovery, residual inspection, stable-round counter, saturation. Miss attribution measured two references never proposed out of 717, so the headroom this package addresses is small in this domain |
+| WP-11 training export | **Partial, experiment only.** Declared-arm export of retained boxes to a consumer's training layout, with every dropped box counted by reason | Ignore-mask integration: the trainer used here has no ignore semantics, so unresolved and unsearched regions train as background; a product export must carry them |
+| WP-12 human-label audit | **Partial.** Recorded evidence converted into a declared review order, exposed as `lynceus review`, measured against the free baseline of ascending detector score | A correction loop: nothing writes a reviewer's decision back, and no audit artifact is produced from one |
+| WP-13 | Not delivered in this foundation slice | Detector pseudo-reference comparison |
 | WP-14–15 | Not delivered as a qualified release | Reproducible full model bundle, clean deployment validation, locked independent qualification |
 
 The tiling slice is partial WP-06: the geometry, merging and coverage machinery exist, the complementary discovery routes do not. Nothing in this report marks all of M0 or M1 complete. Synthetic cases verify software behavior; they do not establish detection quality. A completed baseline must remain unqualified and cannot claim an exhaustive annotation.
@@ -53,7 +56,7 @@ VisDrone is aerial imagery, outside assumption A4, and ten images cannot support
 | CLIP ViT-L-14 | `openai/clip-vit-large-patch14` staged at `/home/genadiy/data/models/clip-vit-large-patch14`; supported by the pinned `transformers` 4.49.0 |
 | TTN weights | Both released variants (`ttn`, `ttnd`) downloaded from the repository's Dropbox links. No hashes are published and the repository states no licence, so they are staged for measurement only and are not bundleable under WP-02/WP-14 |
 | SAM 1 | `facebook/sam-vit-huge`, ungated, supported by the pinned `transformers` via `SamModel` |
-| SAM 3 | **Blocked.** `facebook/sam3` is gated `manual` on Hugging Face and returns 401 without an approved access request; no token is configured on this host. The pinned `transformers` 4.49.0 also has no SAM 2 or SAM 3 support, so adopting it is a dependency bump to be staged as its own change (D32) |
+| SAM 3 | **Staged.** Obtained outside the gated `facebook/sam3` route and bundled at `.chkpts/bundle-sam3.json`, 9 assets hash-verified, adapter `sam3`, capability `box_prompted_boundary_refinement`. Requires `transformers` 5.17.0, which is the current pin; the earlier 4.49.0 bundle is retained as `bundle-owlv2-large-transformers-4.49.0.json` |
 
 ## External resources still pending
 
@@ -690,11 +693,17 @@ correctly refusing an unswept panel with `incomplete_sweep: 6 of 6 tiles unvisit
 panel passing through `lynceus evaluate` with `category_scope: null`, no out-of-scope exclusions,
 and denominators intact.
 
-The default selection is the held-out panel already measured, so annotating those images converts
-the existing precision bound into a number rather than producing a second result comparable to
-nothing. What remains is the annotation itself, which is human work this delivery cannot do for
-itself, and it is now the single blocker between this system and an interpretable precision figure,
-a first calibration, and any G9 outcome at all.
+The default selection is the held-out panel already measured, so annotating those images would
+convert the existing precision bound into a number rather than producing a second result comparable
+to nothing.
+
+**Superseded as the critical path.** The harness stands and the skeletons are prepared, but manual
+annotation of a dense panel was judged unlikely to happen (D51) and was replaced: D53 recovers
+precision by auditing a sample of unmatched boxes, and D54 replaces manual adjudication with
+automatic verification against an independent model whose sensitivity is itself measured on the
+settled half of the population. Those produced the 0.266 bound and the ~0.53 estimate reported
+below. The panel harness remains available for a future exhaustive panel and is no longer what
+blocks a precision figure.
 
 ### The review page
 
@@ -803,3 +812,737 @@ different direction: `person` has no useful ancestor in this ontology, so when i
 `bicycle` on a rider the fallback emits `unknown_object` rather than guess. The verifier says those
 are people. Neither model is a reference, so this localises the problem rather than settling it,
 and it points at the ontology rather than at the detector.
+
+## Measured: searching a prompt vocabulary, and two things it taught
+
+Phrasing is configuration, and it was never chosen: both the detector and the SAM 3 verifier built
+their prompts from the ontology's class names verbatim, in separately written lines, with the
+`synonyms` field populated on none of the twelve classes and read by nothing. Vocabularies are now
+their own versioned artifacts, one per model family, and they are searched rather than written.
+
+The search runs on the development panel, caches image features and box predictions -- which no
+phrasing changes -- and re-runs only the text tower and class head per candidate, so a candidate
+costs seconds and the scores are exactly those of a full forward pass. Forty candidate phrasings
+across nine classes, coordinate ascent over the whole vocabulary because the emitted label is
+whichever class wins across all prompts.
+
+### The first objective was wrong, and held-out measurement caught it
+
+The first search maximised class-agnostic localization and gained 32.9% on development. The gain
+replicated on the held-out panel, so it was not noise. It was also worthless:
+
+| | baseline | searched v1 |
+|---|---|---|
+| retained boxes | 2374 | 1797 |
+| its own objective | 0.408 | **0.473** |
+| `unknown_object` emitted | 166 | **278** |
+| `person` emitted | 264 | **138** |
+| useful-label coverage (G4) | 0.480 | **0.386** |
+
+A vocabulary can buy cleaner localization by pushing contested boxes into abstention: fewer boxes,
+better placed, worse named. The measure being optimized rose sixteen per cent while the measure the
+gate scores fell nineteen. Reporting only the development number would have shipped this as a
+one-third improvement. The artifact is kept in
+[`docs/rejected/`](rejected/vocabulary-owlv2-localization-objective.json) rather than deleted,
+because a rejected result is evidence, and the reason is written into the objective's docstring so
+it is not re-derived.
+
+### The corrected objective improves the objective and still costs coverage
+
+The objective now counts what G1 and G4 count: a reference found at IoU 0.75 under a permitted,
+non-abstaining label. That search gained 43% on development.
+
+| held-out panel, 717 references | boxes | localized @.50 | named @.75 | G4 coverage | precision @.50 | objective |
+|---|---|---|---|---|---|---|
+| baseline | 2374 | 631 | 344 | 0.4798 | 0.2658 | 0.2226 |
+| searched v1 (rejected) | 1797 | 595 | 277 | 0.3863 | 0.3311 | 0.2204 |
+| **searched v2** | **1683** | 601 | 334 | **0.4658** | **0.3571** | **0.2783** |
+
+Two things to read here and neither is a clean win.
+
+The development gain was 43% and the held-out gain on the same objective was 25%, so about two
+fifths of the improvement did not survive the move. That gap is what selecting among forty
+candidates on ten images costs, and it is the reason the development score is never the result.
+
+More importantly, **G4 itself went down**, from 0.4798 to 0.4658. The objective rose because it
+includes precision, which improved by a third, on twenty-nine per cent fewer boxes. That is a
+defensible trade -- far fewer false boxes for one and a half points of coverage -- but it is a
+trade, and the gate it is nominally aimed at regressed. So `owlv2-aerial-searched-v2` ships as an
+available artifact and not as the default; adopting it is a product decision about which gate
+matters more, and the evidence for it is here rather than in a headline.
+
+The abstention problem did not recur: `unknown_object` fell from 166 to 130 under v2, against 278
+under v1.
+
+## Measured: the abstention was a category error, and fixing it removes it entirely
+
+Every one of the 166 `unknown_object` labels on the held-out panel came from `person` competing with
+a vehicle class, and the SAM 3 verifier independently called 109 of those abstentions people. Two
+measurements from different directions pointed at the same place, and neither pointed at the
+detector.
+
+The cause was in the naming rule rather than in the ontology's vocabulary or the model's vision. The
+rule compares the two strongest classes on a box and, treating them as competing readings of one
+entity, falls back to the class they jointly support -- or to `unknown_object` where that class is
+not useful. But a person on a motorcycle is two entities the policy counts separately, and a box
+around the rider contains both. The detector scoring `person` and `motorcycle` there was describing
+what is present, not hesitating; the rule resolved a conflict that did not exist and discarded a
+supported class to do it. It is the same error the policy forbids elsewhere, where containment is
+taken to imply identity.
+
+Ontology version 2 declares which classes can co-occur in one region -- a person rides or is carried
+by each vehicle class -- and naming does not fall back on a declared co-occurrence. The class list is
+unchanged, and version 1 remains valid for the runs measured under it.
+
+| held-out panel, 717 references | ontology v1 | v2 | change |
+|---|---|---|---|
+| **`unknown_object` emitted** | **166** | **0** | **-166** |
+| retained boxes | 2374 | 2311 | -63 |
+| class-correct @ IoU 0.50 | 585 | 599 | +14 |
+| class-correct @ IoU 0.75 | 344 | 346 | +2 |
+| G4 useful-label coverage | 0.4798 | 0.4826 | +0.0028 |
+| precision @ IoU 0.50 | 0.2658 | 0.2713 | +0.0055 |
+| recall @ IoU 0.50 | 0.8801 | 0.8745 | -0.0056 |
+
+The rule fired on 121 boxes. Abstention is gone as a category, `person` rose from 264 to 327 and
+`bicycle` from 318 to 347, and precision and useful-label coverage both improved slightly against
+four localized matches lost.
+
+The size of the coverage gain is the more informative number. Removing 166 abstentions added only
+two correctly labelled references at IoU 0.75, because those boxes were mostly small riders whose
+geometry does not clear the tight threshold. The abstention was concealing a localization limit
+rather than causing a naming loss: the objects were found and are now named, and they still do not
+clear 0.75. That returns the question to boundary quality, which is where miss attribution and
+boundary headroom already placed it, and it is a reminder that removing a visible failure is not
+the same as removing the thing it was standing in front of.
+
+
+## Measured: the three improvements together, and one of them is not an improvement
+
+Refinement, the searched prompt vocabulary and the co-occurrence ontology were each measured
+alone. Nothing had measured them together, and they interact: the vocabulary changes which boxes
+exist, refinement changes their geometry, co-occurrence changes their labels. Both panels were run
+with all three, and with refinement and co-occurrence only.
+
+| held-out, 717 references | kept | IoU>=.50 | IoU>=.75 | IoU>=.85 | recall | precision | G4 | G5 | `unknown` |
+|---|---|---|---|---|---|---|---|---|---|
+| shipped | 2374 | 631 | 358 | 205 | 0.8801 | 0.2658 | 0.4728 | 0.3249 | 166 |
+| **refinement + co-occurrence** | 2311 | 624 | **374** | **219** | 0.8703 | 0.2700 | **0.5077** | 0.3510 | 0 |
+| all three | 1630 | 592 | 363 | 216 | 0.8257 | 0.3632 | 0.4951 | 0.3649 | 0 |
+
+| development, 827 references | kept | IoU>=.50 | IoU>=.75 | IoU>=.85 | recall | precision | G4 | G5 | `unknown` |
+|---|---|---|---|---|---|---|---|---|---|
+| shipped | 2543 | 672 | 372 | 206 | 0.8126 | 0.2643 | 0.4365 | 0.3065 | 176 |
+| **refinement + co-occurrence** | 2485 | **678** | **415** | **234** | **0.8198** | 0.2728 | **0.4788** | 0.3451 | 0 |
+| all three | 1740 | 621 | 391 | 227 | 0.7509 | 0.3569 | 0.4571 | 0.3655 | 0 |
+
+Refinement and co-occurrence together improve every quantity the reference can adjudicate, on both
+panels: matches at both tight thresholds, useful-label coverage, the localization ratio, and
+abstention removed entirely, with precision slightly up. Recall moves -0.0098 on one panel and
++0.0072 on the other, which is the shape of no effect rather than a trade.
+
+Adding the searched vocabulary reverses part of that. It is worse than refinement and co-occurrence
+alone at IoU 0.75 (363 against 374, and 391 against 415), at IoU 0.85, and on useful-label
+coverage, on both panels, and it costs 0.045 and 0.069 of recall. Its only gain is precision.
+
+That gain is the one number here the reference cannot adjudicate. The vocabulary removes 744 boxes
+on the held-out panel and loses 32 matches doing it, so roughly 712 removals are of unmatched
+boxes -- and verification measured that around 644 of 1743 undecided boxes are real objects
+VisDrone never annotated. A precision figure assembled mostly from deleting unmatched boxes
+measures the reference's vocabulary as much as the annotator's correctness, while the recall and
+coverage losses paid for it are fully adjudicated.
+
+So the searched vocabulary is not adopted, and the reason is stronger than D59 recorded: it is not
+a trade between an unverifiable gain and a verifiable cost, it is worse on the verifiable metrics
+as well. `owlv2-aerial-searched-v2` remains shipped as an artifact, and the measurement above is
+the reason it is not the recommendation.
+
+### Recommended configuration
+
+`--ontology aerial-traffic-strict-v2 --refine-bundle <sam3 bundle>` with the baseline vocabulary.
+Refinement cannot be a built-in default because the refiner bundle path is deployment-specific, so
+the recommendation is documented rather than hardcoded. The panel refines in about 47s per image
+on one RTX 3060, roughly a third above the unrefined cost.
+
+## Measured: consensus as a pipeline stage, and it is the best filter found
+
+Verification was a separate script producing a report. It is now a stage: `--verify-bundle` loads
+an independent verifier, every retained box carries its confirmation into the candidate store, and
+`--require-verification` makes acceptance depend on it. Nothing is removed -- an unconfirmed box
+keeps its geometry and records `unconfirmed_by_independent_model`, because a box the verifier
+missed and a box that is not there are the same observation.
+
+Both panels, on the recommended configuration with refinement:
+
+| | kept | confirmed | sensitivity on known positives | recall | precision |
+|---|---|---|---|---|---|
+| held-out, unfiltered | 2311 | | | 0.8703 | 0.2700 |
+| held-out, confirmed only | 1252 | 54.2% | **0.9792** | 0.8522 | **0.4880** |
+| development, unfiltered | 2485 | | | 0.8198 | 0.2728 |
+| development, confirmed only | 1374 | 55.3% | **0.9853** | 0.8077 | **0.4862** |
+
+Precision nearly doubles for roughly 1.5 points of recall, and the direction and magnitude are the
+same on both panels. Every other filter tried was worse: the searched vocabulary bought 0.09 of
+precision for 0.042 of recall and lost tight-threshold matches with it, a raw score threshold cost
+0.20 of recall for 0.22 of precision, and box fusion and TTN pruning were negative outright.
+
+Sensitivity is higher than the 0.967 measured before refinement, on both panels. That is expected
+rather than surprising: tighter boxes match the verifier's detections more often, so refinement and
+verification compound instead of competing.
+
+What this does not establish is that the removed boxes are false. Sensitivity is measurable because
+known positives exist; specificity is not, because no box here is a known negative. Two models of
+overlapping lineage also fail alike, so confirmation is reproducibility rather than independent
+support, and the capability record says so in the run. The honest reading is that filtering to
+confirmed boxes trades a measured 1.5 points of recall for a precision figure that remains a bound.
+
+## Measured: a third verifier, and why it is not adopted
+
+Grounding DINO was staged as an independent verifier on the argument that architectural separation
+is what makes agreement worth anything: a Swin backbone and a BERT text encoder against OWLv2's
+CLIP-style tower and SAM 3's presence head. It is bundled, preflights, and its span-to-class
+mapping returned no unmapped spans on the panel.
+
+The first measurement was unfair, and finding that out was worth more than the result it revised.
+Both verifiers were tiled identically, which was the obvious confound and was checked. Two others
+were not. SAM 3 receives nine forward passes per tile to Grounding DINO's one, because it is
+prompted per class while Grounding DINO consumes the whole phrase list at once. And Grounding DINO
+has a second threshold, `text_threshold`, gating span extraction, with no SAM 3 equivalent, left at
+its library default. Re-running shows what the harness cost:
+
+| configuration | sensitivity on known positives | sensitivity at <16px |
+|---|---|---|
+| tile 512, threshold 0.30 | 0.7612 | 0.6149 |
+| tile 512, threshold 0.10 | 0.8269 | 0.7500 |
+| tile 256, threshold 0.15 | **0.8862** | **0.8176** |
+| SAM 3, tile 512, threshold 0.30 | 0.9792 | 0.9797 |
+
+Small-object sensitivity moved from 0.615 to 0.818 on tiling and thresholds alone, so the first
+reading -- that the model was largely blind below 32 pixels -- was substantially an artifact of how
+it was asked. A negative result about a model is only as good as the fairness of the configuration
+it was measured in.
+
+It is still not adopted, and at the corrected configuration the reason is cleaner:
+
+| rule | sensitivity | confirmed (undecided) | kept | recall | precision |
+|---|---|---|---|---|---|
+| SAM 3 | 0.9792 | 0.3800 | 1252 | 0.8522 | 0.4880 |
+| Grounding DINO, tile 256 | 0.8862 | 0.2306 | 942 | 0.7713 | 0.5870 |
+| either confirms | **0.9792** | 0.4161 | 1313 | 0.8522 | 0.4653 |
+| both confirm | 0.8862 | 0.1944 | 881 | 0.7713 | **0.6277** |
+
+Where it counts, Grounding DINO's confirmations are a subset of SAM 3's. The two agree on 0.8131 of
+boxes; SAM 3 confirms 371 that Grounding DINO does not, 58 of them known positives, while Grounding
+DINO confirms 61 that SAM 3 does not, **none** of them known positives. Taking the union leaves
+sensitivity at 0.9792, exactly SAM 3 alone. A second architecture, fairly configured, added no
+known-real box.
+
+So the third lineage did not decorrelate on this data. That is a finding about these two models at
+this object scale, not about Grounding DINO as a detector, which was not tested here.
+
+One operating point is worth keeping rather than discarding. Requiring both verifiers reaches
+0.6277 precision at 0.7713 recall, against SAM 3 alone at 0.4880 and 0.8522. That is not dominated;
+it is a different point on the risk-coverage curve, and a consumer wanting fewer and surer boxes
+can have it. What it cannot be called is more evidence.
+
+## Measured: a class-agnostic fourth model, and a pattern across all three
+
+Grounding DINO failed to decorrelate, so the next candidate was chosen to differ on every axis
+that one shared. WeDetect-Uni has a ConvNeXt backbone rather than a vision transformer, takes no
+prompt at all, and letterboxes to 1280 against the panel's 1360x765 frames. Being class-agnostic
+makes it the only verifier here whose agreement cannot be confounded by vocabulary or phrasing:
+it is asked whether something is there, not whether a named thing is there.
+
+It is GPL-v3, so it is loaded from a directory the bundle names rather than vendored, and the
+manifest records the licence. It is staged for measurement and is not distributable under WP-14.
+
+Configured across four settings rather than one default, after the Grounding DINO correction:
+
+| configuration | sensitivity | <16px | confirmed (undecided) | kept | recall | precision | wall |
+|---|---|---|---|---|---|---|---|
+| whole frame, threshold 0.20 | 0.6955 | 0.4797 | 0.0990 | 601 | 0.6053 | 0.7221 | 19s |
+| whole frame, threshold 0.05 | 0.8542 | 0.7027 | 0.2662 | 982 | 0.7434 | 0.5428 | 19s |
+| **tile 512, threshold 0.05** | **0.9103** | 0.8581 | 0.3290 | 1123 | 0.7922 | 0.5058 | **104s** |
+| tile 256, threshold 0.05 | 0.8910 | 0.8176 | 0.2940 | 1052 | 0.7755 | 0.5285 | 439s |
+| SAM 3, tile 512, threshold 0.30 | 0.9792 | 0.9797 | 0.3800 | 1252 | 0.8522 | 0.4880 | 579s |
+
+Tiling helps until it does not. Grounding DINO improved monotonically as tiles shrank; WeDetect
+peaks at 512 and falls at 256, because its 1280 input already upscales a 512 crop 2.5 times and a
+smaller tile mostly fragments objects across borders. A tile schedule is not a shared parameter
+between models, it is a per-model one.
+
+At its best setting it reaches 0.9103 sensitivity in 104 seconds, better than Grounding DINO's
+best on both counts and five and a half times faster than SAM 3, whose per-class prompting costs
+ninety forward passes per frame to WeDetect's ten.
+
+### The pattern
+
+| verifier, best setting | sensitivity | known positives it confirms that SAM 3 does not |
+|---|---|---|
+| Grounding DINO, tile 256 | 0.8862 | **0** |
+| WeDetect-Uni, tile 512 | 0.9103 | **1** |
+| WeDetect-Uni, whole frame | 0.8542 | 3 |
+| WeDetect-Uni, tile 256 | 0.8910 | 3 |
+
+Taking the union of SAM 3 and WeDetect lifts sensitivity from 0.9792 to 0.9808. Adding Grounding
+DINO instead leaves it at 0.9792 exactly. Two architectures selected for maximum separation from
+the first -- one a phrase grounder on a Swin backbone, the other a convolutional model with no text
+conditioning whatsoever -- both confirm what is nearly a subset of SAM 3's known positives.
+
+That is now a pattern rather than a quirk of one model, and it is the useful finding here: on this
+data, at this object scale, **adding verifiers does not add sensitivity**. The decorrelation that
+would make consensus more than reproducibility did not appear, and it did not appear along the
+architectural axis that was supposed to produce it.
+
+One asymmetry is worth stating because it is the limit rather than the result. On the population
+that can be measured -- boxes matching an eligible reference -- WeDetect adds one box. On the
+population that cannot be measured it differs substantially: it confirms 202 undecided boxes SAM 3
+does not, lifting the union's confirmation rate on undecided boxes from 0.3800 to 0.4991. So the
+models do see different things; nothing here can say whether those things are real objects VisDrone
+omitted or false positives the two happen not to share. That is the finite-category ceiling, and
+no further model relieves it.
+
+### What is kept
+
+Requiring both verifiers reaches 0.6156 precision at 0.7908 recall, against SAM 3 alone at 0.4880
+and 0.8522. Like the Grounding DINO intersection it is not dominated, it is a stricter point on the
+risk-coverage curve, and it costs a second model's runtime. SAM 3 alone remains the recommended
+verifier: highest sensitivity, and the only one whose small-object sensitivity holds above 0.94 in
+every size bin.
+
+## Measured: the verifier threshold is the precision control, fitted on development
+
+SAM 3's detection score already includes its presence head -- the processor multiplies each query's
+score by the presence probability -- so the 0.3 the verification stage runs at is presence filtering
+already, and raising it is the calibrated-threshold step the auto-labelling literature recommends.
+[`fit_verify_threshold.py`](../examples/visdrone/fit_verify_threshold.py) fits it on the development
+panel, writes the thresholds, and only then scores held-out once (D57).
+
+The fit targets sensitivity on known positives, not precision. Precision is a bound here, and
+optimising a bound rewards deleting real objects the reference omits; sensitivity is the one quantity
+the reference measures without that ambiguity.
+
+| operating point (fitted on development) | threshold | dev sensitivity | held-out sensitivity | held-out recall | held-out precision | kept |
+|---|---|---|---|---|---|---|
+| current | 0.300 | 0.9853 | 0.9792 | 0.8522 | 0.4880 | 1252 |
+| sensitivity 0.98 | 0.304 | 0.9808 | 0.9760 | 0.8494 | 0.4935 | 1234 |
+| sensitivity 0.95 | 0.325 | 0.9528 | 0.9615 | 0.8368 | 0.5177 | 1159 |
+| sensitivity 0.90 | 0.392 | 0.9012 | 0.9022 | 0.7852 | 0.5681 | 991 |
+| sensitivity 0.85 | 0.461 | 0.8510 | 0.8558 | 0.7448 | 0.6131 | 871 |
+
+Every target transfers to held-out within 0.012, so these are frozen operating points rather than
+held-out tuning, selectable with `--verify-threshold`. Per-class thresholds were fitted for the three
+labels with at least 20 development positives and were worse on both panels at every target (0.5380
+against 0.5681 held-out precision at 0.90); they are not adopted.
+
+The threshold also re-prices consensus. Requiring Grounding DINO and SAM 3 to agree reached 0.6277
+precision at 0.7713 recall; SAM 3 alone at 0.461 reaches 0.6131 at 0.7448, with one model's runtime.
+Most of what a second verifier's agreement buys, a stricter threshold on the first already buys. The
+agreement rule was not fitted on development, so the comparison is indicative, not locked.
+
+## Measured: large and small VLMs as detectors and verifiers
+
+A published leaderboard (Roboflow, 250 images, 173 classes, mAP@50) reports frontier VLMs far above
+SAM 3 at zero-shot detection. Its SAM 3 configuration is unpublished, it scores only mAP@50, and its
+scenes are sparse and medium-scale, so it was measured here rather than adopted.
+
+**Opus 5.5, one image (0000346).** Run through subagents in a Claude Code session, so no API key is
+involved and nothing is reproducible or bundleable (WP-14). SAHI means six 512px tiles upscaled 2x
+plus the whole frame, routed by size: objects of 96px or more from the frame, smaller from tiles.
+Routing matters -- a merge ranked by tile-edge distance lost the bus and three large cars.
+
+| image 0000346, 82 references | kept | IoU>=.50 | IoU>=.85 | recall | precision | <32px |
+|---|---|---|---|---|---|---|
+| Opus 5.5 whole frame | 88 | 58 | 21 | 0.707 | 0.659 | 6/14 |
+| Opus 5.5 SAHI, size-routed | 101 | 66 | 29 | 0.805 | 0.653 | 12/14 |
+| Lynceus retained (refinement + co-occurrence) | 254 | 76 | | 0.927 | 0.299 | |
+| of which SAM 3 confirms | 136 | 76 | | 0.927 | 0.559 | |
+
+Opus names well (88% of matches in the right VisDrone class) and places fewer boxes on nothing, but
+finds fewer objects and draws looser boxes. It adds 2 references SAM 3's confirmed set misses, and
+misses 12 that set finds. On this image its advantage is precision and naming, not coverage. One image
+and one sample per tile is an observation, not a result.
+
+A correction belongs here: an earlier reading of this image paired SAM 3's row ids with the
+`combined-seed1` run (all three changes, the non-recommended configuration) instead of
+`refined-v2-seed1`, and reported Opus adding 16 references SAM 3 missed. That was an id mismatch
+between runs. The numbers above use the run SAM 3 actually verified.
+
+**Qwen3-VL-8B, local, 4-bit.** Staged at revision `0c351dd` (Apache-2.0), bitsandbytes nf4 on the
+RTX 3060. Three roles, each a fair configuration of the obvious setup:
+
+- *Detector, SAHI, one prompt per class* (0000346): 0.744 recall, 0.449 precision, 10/14 small, about
+  40 minutes per image. Mixed-class prompting degenerated into repetition loops (123 outputs, 12
+  distinct), and even per-class prompting emits ladders of coordinates enumerated rather than seen.
+- *Crop verifier* (held-out panel, same 2311 boxes as SAM 3): the box drawn in red on a crop with 3x
+  context, one-word answer.
+
+| rule | kept | sensitivity | undecided confirmed | recall | precision |
+|---|---|---|---|---|---|
+| SAM 3 | 1252 | 0.9792 | 0.3800 | 0.8522 | 0.4880 |
+| Qwen3-VL-8B crop | 1657 | 0.9471 | 0.6319 | 0.8243 | 0.3567 |
+| either | 1844 | 0.9952 | 0.7250 | 0.8661 | 0.3368 |
+| both | 1065 | 0.9311 | 0.2869 | 0.8103 | 0.5455 |
+
+  It is less sensitive (0.905 against 0.980 below 16px) and far more permissive. It is the first
+  verifier to decorrelate at all -- 10 known positives SAM 3 misses, against 0 and 1 for Grounding
+  DINO and WeDetect -- but not usefully.
+- *Tile plus native bbox_2d coordinates*, scored from next-token probabilities (0000346): it confirms
+  95% of undecided boxes at 0.5 and 88% at 0.98. A control moving known positives onto empty ground
+  showed it partly reads coordinates (empty ground confirmed 42%, real boxes 100%), but not finely
+  enough to reject the parts, duplicates and clusters that make up the undecided population.
+
+So a zero-shot small VLM is not the missing local component. Meta's exhaustivity verifier is a
+fine-tuned model; the untested version of that here is a verifier fine-tuned on labels from a large
+model, which belongs with WP-11–13.
+
+## Measured: the frozen threshold on data it never saw, and on classes it never saw
+
+Four RF100-VL test sets (`probicheaux/rf100-vl` @ `6b59bae`, Apache-2.0) were converted into the
+VisDrone layout by [`import_rf100vl.py`](../examples/visdrone/import_rf100vl.py), each with a mapping
+declared before any prediction was seen, and run through the unchanged configuration: OWLv2 large at
+one tiling level, SAM 3 refinement and SAM 3 verification. The thresholds fitted on the VisDrone
+development panel were applied with `fit_verify_threshold.py --apply`; nothing was refitted.
+
+| dataset | ontology | images | references | found (IoU 0.5) | kept at 0.392 | precision at 0.392 |
+|---|---|---|---|---|---|---|
+| VisDrone held-out | aerial-traffic-strict-v2 | 10 | 717 | 0.870 | 0.902 | 0.568 |
+| uavdet-small | aerial-traffic-strict-v2 | 20 | 1409 | 0.889 | 0.923 | 0.695 |
+| aerial-pool | aerial-traffic-strict-v2 | 15 | 166 | 0.849 | 0.943 | 0.359 |
+| human-detection-in-floods | aerial-traffic-strict-v2 | 10 | 292 | 0.325 | 0.989 | 0.344 |
+| APOCE construction | aerial-construction-v1 | 40 | 113 | 0.858 | **0.835** | 0.182 |
+
+"Kept" is the share of boxes matching a reference that survive the threshold, against a 0.90 target.
+
+On road users the threshold transfers and errs toward keeping: 0.90 to 0.99 on three datasets it
+was never fitted on. How much it removes depends on the scene. It lifts precision from about 0.27 to
+0.57–0.70 in cluttered traffic, and changes little over water, where there was little to remove.
+
+The flood set's low recall is a box convention, not missed people. Its labellers box splash, wake
+and shadow; Lynceus, refined by SAM 3, boxes the body at a median 0.57 of the reference area. With a
+box lying at least 80% inside a reference counted as found, recall is 0.668 and precision 0.707.
+IoU 0.5 measures the convention when a dataset has its own; a per-dataset match rule declared in the
+mapping would separate the two.
+
+APOCE is the first measurement on classes other than road users, with a new ontology of seven
+machines under a `construction_equipment` parent and prompts equal to the class names. Finding holds
+(0.858). The threshold does not fully transfer: 0.835 kept at 0.392, and only 0.897 at 0.30, most of
+the loss from tower cranes, 8 of 12 unconfirmed, a thin structure that barely fills its box.
+
+Naming is the weak step once classes are fine-grained. [`label_report.py`](../examples/visdrone/label_report.py)
+scores each matched box's label as exact, broader (a parent the mapping accepts) or wrong:
+
+| panel | Lynceus exact | Lynceus broader | Lynceus wrong | SAM 3 exact | SAM 3 broader | SAM 3 wrong |
+|---|---|---|---|---|---|---|
+| VisDrone held-out | 0.290 | 0.647 | 0.062 | 0.576 | 0.313 | 0.111 |
+| APOCE | 0.031 | 0.969 | 0.000 | 0.333 | 0.241 | 0.425 |
+
+Conservative naming almost never guesses wrong, because it almost never guesses: with seven similar
+machine classes the runner-up is nearly always close, so it falls back to the parent 97% of the time.
+SAM 3's own label is exact twice as often on VisDrone and ten times as often on APOCE, at a higher
+wrong rate; on APOCE it confuses excavators with bulldozers, dump trucks and piling machines (8 of 45
+exact). Using the verifier's label to refine a parent fallback is the obvious next measurement; it is
+not adopted here.
+
+## Measured: what a run costs, and most of it was not the models thinking
+
+[`evaluation.py`](../src/lynceus/evaluation.py) listed `operational cost` among the unimplemented
+metrics while cost had quietly become the constraint on what can be measured at all: at the rate the
+recommended configuration ran, auto-labelling enough images to train a consumer model on the output
+was a multi-day proposition, which is why no such measurement exists in this report. So the stages
+were separated before anything was made faster.
+
+Every run now records `stage_seconds` per stage, the unattributed remainder, and what the run cost
+per object it kept. A stage that did not run is absent rather than zero. One panel image, recommended
+configuration:
+
+| stage | seconds |
+|---|---|
+| verification | 17.5 |
+| discovery | 10.7 |
+| refinement | 4.4 |
+| merge and acceptance | 0.02 |
+| unattributed: three checkpoint loads, normalization, artifact writing | 57.1 |
+
+Two thirds of a single-image run was loading models. That is unavoidable per image and paid once per
+panel, so the panel runner now builds the detector, refiner and verifier once and hands them to every
+run. `annotate` refuses a reused verifier whose own threshold contradicts the one its manifest
+records, because a shared model must not be able to misreport the operating point a run claims.
+
+### The verifier encodes each tile once
+
+Nine prompts over ten tiles cost ninety encoder passes when every prompt carries its own copy of the
+image. `Sam3Model` accepts precomputed `vision_embeds`, so the tile is encoded once and every prompt
+is scored against those features: ninety vision passes become ten. The verifier also stops building
+masks, because the processor's filter is score-only -- presence-weighted logits against the threshold
+-- so resizing and binarizing masks changes neither which boxes survive nor where they sit. A test
+pins that equality against the library's own post-processing instead of asserting it.
+
+Scoring several prompts in one decoder call is available as `--verify-prompt-batch` and is not the
+default. Measured against the serial path on one image it leaves the detection count and every label
+unchanged, pairs every box at IoU 0.987 or better, and moves scores by up to 0.0054 and box edges by
+0.13 pixels. That is small, but the shipped operating points are frozen thresholds at 0.392 and
+0.461, so exactness is the default and the faster path is opt-in with its drift recorded.
+
+| verifier path, one panel image | seconds | vision passes | decoder calls | identical to serial |
+|---|---|---|---|---|
+| per prompt per tile (previous) | 51.2 | 90 | 90 | — |
+| shared tile features, `--verify-prompt-batch 1` | 18.2 | 10 | 90 | **yes** |
+| shared tile features, batch 3 | 10.5 | 10 | 30 | scores within 0.0054 |
+| shared tile features, batch 9 | 8.6 | 10 | 10 | scores within 0.0054 |
+
+### Panel cost, and why this is a cost result and not a new measurement
+
+| held-out panel, recommended configuration | before | after |
+|---|---|---|
+| wall for ten images | 579s for the verification stage alone | **424.6s for the whole pipeline** |
+| per image | | 42.5s |
+| per retained object | | 0.184s |
+| retained | 2311 | 2311 |
+| confirmed | 1252 (54.2%) | 1252 (54.18%) |
+
+The retained and confirmed counts are identical to the figures recorded above, which is the point:
+nothing about what the pipeline decides has changed. Verification is still the largest stage at
+189.3s, then discovery at 97.8s, loading and writing at 72.6s, refinement at 60.1s, merging at 4.7s.
+
+What this unblocks is the measurement that was out of reach: labelling a few hundred unannotated
+images, training a consumer model on the labels, and scoring that model against human labels. That
+prices the boxes a finite-category reference cannot adjudicate -- a real object VisDrone omitted
+raises a student's score and a false box lowers it -- without needing an exhaustive panel.
+
+## Measured: the verifier's geometry as boundary evidence — it does not beat the score
+
+Boundary support rested on the detector agreeing with itself: the alternatives a box is checked
+against are that detector's other views of the same object. Where a verifier confirms a box, the
+overlap that confirmed it is an independent reading of the same extent, so disagreement there is
+boundary uncertainty by the argument that already makes multi-view disagreement one. The rule is
+implemented as `--accept-verifier-boundary-iou`, withholds support and never moves a box, because
+refinement is the stage entitled to change geometry and it does so against pixels rather than
+against a vote.
+
+Re-applied to the held-out panel's recorded evidence, requiring confirmation at every row so only
+the extent rule varies, against the bar any remover has to clear -- the detector's own score
+removing the same number of boxes:
+
+| `verifier_boundary_iou` | accepted | at .50 | at .75 | at .85 | precision at .75 | score baseline of the same size | its matches at .75 |
+|---|---|---|---|---|---|---|---|
+| none | 227 | 163 | 123 | 92 | 0.5419 | — | — |
+| 0.6 | 221 | 163 | 123 | 92 | 0.5566 | 0.105 → 218 | 123 |
+| 0.7 | 211 | 160 | 123 | 92 | 0.5829 | 0.115 → 211 | 122 |
+| 0.8 | 193 | 152 | 120 | 90 | 0.6218 | 0.130 → 192 | 121 |
+| 0.9 | 155 | 137 | 112 | 89 | 0.7226 | 0.170 → 155 | 115 |
+
+Read alone the rule looks good: at 0.7 it removes sixteen accepted boxes and loses nothing at IoU
+0.75 or 0.85, lifting precision from 0.542 to 0.583 at unchanged coverage. Read against the
+baseline it is a wash -- raising the score to 0.115 keeps the same 211 boxes and 122 matches instead
+of 123 -- and by 0.9 it is worse than the score, 112 matches against 115 at an identical accepted
+count. So a second model's extent reading is not a better pruner than the number the detector
+already emits, which is the same outcome TTN reached by a different route.
+
+It is kept, off by default, for the reason D42 kept refinement unconditional: the rule is honest
+evidence about extent and a consumer may want it, but it is not an improvement and is not presented
+as one.
+
+### A replay bug this found, and what it invalidates
+
+`rebuild_evidence` keyed each object's evidence by its box geometry. Refinement moves that geometry
+while the retained candidate still carries the proposal, so after refinement every lookup missed and
+every object replayed as an unverified zero-score detection -- the first sweep returned zero accepted
+boxes at every operating point, which is what made it visible. Retained candidates are written in
+object order and the verification stage already pairs them that way, so the replay now pairs them
+that way too and refuses a run whose counts disagree rather than falling back.
+
+The risk-versus-coverage table recorded earlier under WP-09 predates refinement, so its lookups did
+match and its numbers stand. Any sweep run over refined runs before this fix did not. Recomputed on
+the held-out panel in the recommended configuration:
+
+| acceptance score | accepted | correct | precision | useful coverage |
+|---|---|---|---|---|
+| 0.10 | 175 | 113 | 0.646 | 0.158 |
+| 0.20 | 122 | 96 | 0.787 | 0.134 |
+| 0.30 | 93 | 85 | 0.914 | 0.119 |
+| 0.40 | 54 | 52 | 0.963 | 0.073 |
+| 0.50 | 13 | 13 | 1.000 | 0.018 |
+| 0.70 | 2 | 2 | 1.000 | 0.003 |
+| 0.80+ | 0 | 0 | undefined | 0.000 |
+
+Both precision and coverage are better than the pre-refinement curve at every comparable point
+(0.646 against 0.597 and 0.158 against 0.128 at score 0.10), and the joint gate is as far away as
+before: precision reaches 1.0 on thirteen boxes and coverage has collapsed by then.
+
+## Measured: a review order, and which half of a reviewer's job it helps with
+
+Every retained box already carries five uncertainty dimensions, a detector score, a view count, a
+truncation flag and -- where a verifier ran -- a confirmation and the overlap that produced it. None
+of it reached a person in a usable order, so a reviewer with time for a hundred of two thousand
+boxes had no way to choose them. [`lynceus.review`](../src/lynceus/review.py) converts that recorded
+evidence into one, worst first, and `lynceus review RUN --limit k` emits it. The rule is declared
+rather than fitted, because a ranking tuned against the panel it is then measured on measures the
+tuning: unresolved dimensions first, then unconfirmed before confirmed, then ascending confirming
+overlap, detector score and area.
+
+Measuring it needs the two populations kept apart. A box found at IoU 0.50 but not at 0.75 is a
+**determined correction**: the object is real, the geometry is wrong, and no assumption about
+unannotated objects enters. A box matching no reference is **undecided** -- a real object VisDrone
+omits looks exactly like a false positive -- so surfacing those sooner is worth something to a
+reviewer and is not evidence of error. The bar is the detector's score ascending, which is free.
+
+Held-out panel, 2311 retained boxes: 374 found at IoU 0.75, 250 found only at 0.50, 1687 matching no
+reference.
+
+| boxes reviewed | determined corrections, review order | by score | undecided boxes, review order | by score |
+|---|---|---|---|---|
+| 50 | 0 | 0 | 50 | 49 |
+| 100 | 0 | 2 | 100 | 97 |
+| 200 | 6 | 9 | 194 | 190 |
+| 400 | **35** | 14 | 345 | **383** |
+| 800 | **80** | 37 | 679 | **748** |
+
+The two orders are good at different jobs, and that is the result. For fixing the geometry of real
+objects the review order reaches 2.2 to 2.5 times as many corrections per budget from 400 boxes on.
+For surfacing boxes that match nothing the score is better, which is unsurprising since a low score
+is what an unmatched box usually has -- and that curve cannot establish that any of those boxes is
+false, so it ranks suspicion rather than error.
+
+Below 200 boxes neither order finds corrections, because the first two hundred boxes in both are
+almost entirely undecided ones. A reviewer whose budget is that small is not fixing boxes under
+either order; they are auditing existence.
+
+What this does not measure is a correction loop, because none exists: nothing here writes a
+reviewer's decision back. The order is the half of WP-12 that can be built and measured without one.
+
+## Measured: what a model trained on these labels is worth
+
+Precision against VisDrone is a bound and this report has said so a dozen times: an unmatched box is
+either a real object the dataset omits or a false positive, and four verifiers did not separate them.
+A model trained on the labels does not need them separated. A real omitted object raises its score and
+a false box lowers it, so training prices exactly the population the reference cannot adjudicate --
+without an exhaustive panel, which is the obstacle every earlier section ran into.
+
+[`student-protocol.json`](../examples/visdrone/student-protocol.json) was frozen before any label
+existed: 200 train-split images selected by a declared rule with sequence-level exclusion against
+val, the dataset's own three-class convention verified box-for-box against its label files on 60
+sampled images, and one arm per verifier threshold and parent-fallback policy. Labelling the slice in
+the recommended configuration took 11178s, 55.9s per image. Every arm then trains the same
+COCO-pretrained yolo11n on the same 200 images with the same hyperparameters and seed, and is scored
+on all 548 val images against human labels. Two seeds, because a spread wider than the gap between
+two arms means those arms are not separated.
+
+| arm | boxes | mAP50 | mAP50-95 | share of human mAP50 | seed spread |
+|---|---|---|---|---|---|
+| human labels | 8149 | 0.4702 | 0.2750 | 1.000 | 0.0006 |
+| auto, 0.392, parent fallback → retrieval | 8507 | **0.4284** | **0.2450** | **0.911** | 0.0062 |
+| auto, verifier threshold **0.392** | 6349 | 0.4223 | 0.2297 | 0.898 | 0.0021 |
+| auto, threshold 0.300 | 7792 | 0.4127 | 0.2236 | 0.878 | 0.0115 |
+| auto, threshold 0.461 | 5749 | 0.4122 | 0.2257 | 0.877 | 0.0022 |
+| auto, 0.392, parent fallback → modal class | 10042 | 0.4085 | **0.2355** | 0.869 | 0.0017 |
+| auto, no verification at all | 10323 | 0.3934 | 0.2128 | 0.837 | 0.0007 |
+| auto, 0.392, parent fallback dropped | 2800 | 0.2060 | 0.0911 | 0.438 | 0.0085 |
+
+**Auto-labels reach 0.911 of human downstream performance at mAP50 and 0.891 at mAP50-95** in the
+best arm, 0.898 and 0.835 under the originally frozen set. That is the first number in this delivery
+that prices the labels rather than bounding them, and it sits inside the 90-95% the auto-labelling
+literature claims for simpler datasets.
+
+**Verification is worth 0.029 of mAP50**, 0.3934 to 0.4223, far outside a seed spread of 0.002. The
+precision gain it was adopted for was a bound; this is not.
+
+**The fitted threshold is at or near the downstream peak, and the stricter point is past it.** The
+published warning -- that downstream performance peaks at moderate confidence and degrades above it
+-- shows up here as 0.461 scoring 0.4122 against 0.392's 0.4223, a gap of 0.010 against spreads of
+0.002. Label-level precision orders those two the other way round: 0.461 keeps fewer boxes at a
+higher precision bound and makes the trained model worse. Between 0.300 and 0.392 the gap is 0.010
+and the 0.300 arm's own seed spread is 0.0115, so **this experiment does not separate them** and the
+peak is located only to within that interval.
+
+### The parent fallback is the expensive decision, and the verifier's label is the right way to make it
+
+Conservative naming emits `vehicle` on 64.7% of matched boxes, which no consumer schema accepts
+directly. Resolving it is a declared policy, and the three policies are 0.46 apart:
+
+| policy at threshold 0.392 | mAP50 | person | car | longvehicle |
+|---|---|---|---|---|
+| retrieval over a crop bank | **0.4284** | 0.3686 | **0.7274** | 0.1894 |
+| verifier's label | 0.4223 | 0.3815 | 0.6606 | **0.2280** |
+| modal class (`vehicle` → `car`) | 0.4085 | 0.3633 | **0.6806** | 0.1791 |
+| dropped | 0.2060 | 0.3886 | 0.1510 | 0.0912 |
+| human labels | 0.4702 | 0.3835 | 0.7591 | 0.2671 |
+
+`person` needs no fallback and the auto arms match human on it almost exactly, 0.3815 against 0.3835.
+The entire gap to human is vehicles. The modal policy wins on `car`, which is what the confusion
+table predicts -- 241 of the 374 matched fallback boxes are cars -- and destroys `longvehicle` by
+relabelling trucks and buses as cars, 0.1791 against 0.2280. Using the verifier's label keeps that
+distinction and is the better policy by 0.014 of mAP50, outside both spreads. It is also the measured
+answer to a question this report left open: the verifier's label *is* worth using to refine a parent
+fallback.
+
+Dropping the fallback is catastrophic: it removes 7242 of about 10000 boxes, the student never sees
+enough cars, and `car` collapses from 0.66 to 0.15. Abstention is cheap in a report and expensive in
+a training set.
+
+One inversion is worth keeping: the modal policy is *better* at mAP50-95, 0.2355 against 0.2297,
+while losing at mAP50. It trades class correctness for keeping every well-localized car box, and the
+two metrics weigh that trade differently.
+
+### Retrieval resolves the fallback better than either, and was declared after the others
+
+A fourth policy was added after the naming table below and before any student saw it, which the
+protocol records as the later addition it is: resolve `vehicle` by the class its nearest neighbours
+carry in a bank of human-labelled crops. It is the best auto arm on both metrics -- 0.4284 and
+0.2450, against the verifier label's 0.4223 and 0.2297 -- and the gain is concentrated exactly where
+the naming table predicted, `car` at 0.7274 against 0.6606 and against human's 0.7591. At mAP50 its
+seed spread of 0.0062 is as large as its 0.0061 lead, so **mAP50 does not separate it from the
+verifier label**; at mAP50-95 the lead is 0.0153 against spreads of 0.005 and it does.
+
+Its weakness is the same as modal's and for the same reason: `longvehicle` falls to 0.1894, because
+retrieval reads a truck as a car far more often than SAM 3 names it one. The two signals are
+complementary rather than ranked, which is a measurement and not yet a rule.
+
+### What this does not establish
+
+The student is scored against the same three-class human labels, so it measures consumer utility
+under VisDrone's conventions and not truth: a real object this dataset never labels still counts
+against the arm that labels it, which is why the auto arms are penalised for the bicycles, motors and
+tricycles they correctly find and the mapping then discards. It is 200 images, one architecture, two
+seeds, and VisDrone remains outside assumption A4 -- a direction, not a gate. And the trainer has no
+ignore semantics, so regions this pipeline records as unresolved train as background; the export
+counts them rather than hiding it.
+
+## Measured: naming by retrieval, and the schema the score is read in
+
+The verifier's label was one candidate for refining a parent fallback. Retrieval is the other: embed
+the crop with a local CLIP tower and take the class its nearest neighbours carry in a bank of
+human-labelled reference crops. It cannot invent a class -- it emits only what the bank holds -- and
+the bank excludes every sequence the scored images belong to, so no crop can be its own neighbour.
+The bank here is 1600 crops over eight classes drawn from 149 training images.
+
+Held-out panel, 624 matched boxes, 415 of them named `vehicle` by the pipeline. Three namings on
+identical boxes, scored against the reference's exact class, a parent the mapping permits, or neither:
+
+| the 415 parent-fallback boxes | exact | broader | wrong | absent |
+|---|---|---|---|---|
+| pipeline label | — | 0.974 | 0.027 | — |
+| SAM 3's label | 0.439 | 0.429 | 0.111 | 0.022 |
+| retrieval | **0.504** | — | 0.496 | — |
+
+Read that way retrieval looks reckless: half its labels are wrong against the ontology, because it
+always commits and has no `vehicle` to fall back on. But the ontology is not the schema a consumer
+receives, and this dataset's own three classes merge car with van and truck with bus and leave
+bicycle, motor and tricycle unlabelled entirely. Scoring the same boxes in that schema:
+
+| the same 415 boxes, consumer schema | usable and correct | wrong | correctly outside the schema | no label exported |
+|---|---|---|---|---|
+| pipeline label (`vehicle`) | 0 | 0 | 0.280 | 0.720 |
+| SAM 3's label | 0.357 | 0.036 | 0.265 | 0.342 |
+| retrieval | **0.547** | 0.135 | 0.227 | 0.092 |
+
+Most of retrieval's "wrong" is `car` read as `van`, which that consumer merges, and `motor` read as
+`bicycle`, which it drops either way. So retrieval exports a usable class for 68% of fallbacks
+against the verifier's 39%, at 0.135 wrong against 0.036. Neither table settles which trade is
+better, because a wrong child label and an absent one cost a consumer differently -- which is why
+the student experiment above was given a retrieval arm, and why that arm wins.
+
+Its residual confusion is fine-grained and systematic: of 240 fallback boxes over cars, retrieval
+calls 142 cars, 59 vans, 19 trucks, 11 tricycles and 9 bicycles. Car against van at twenty pixels is
+not obviously decidable from these crops at all, and the consumer schema is the only reason it does
+not matter here.

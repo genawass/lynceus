@@ -6,7 +6,7 @@ from pathlib import Path
 from io import BytesIO
 from PIL import ImageDraw
 from .images import normalize_image
-from .policy import load_policy,load_ontology,common_ancestor,is_useful
+from .policy import load_policy,load_ontology,common_ancestor,co_occurring,is_useful
 from .contracts import identity,summarize,validate_annotation
 from .artifacts import canonical,digest,write_artifact,verify_artifacts
 from .bundle import preflight,doctor
@@ -15,6 +15,24 @@ from .geometry import validate_box,plan_tiles,covered_fraction,ios,iou
 
 def peak_rss_bytes():
     return rusage.getrusage(rusage.RUSAGE_SELF).ru_maxrss*1024
+
+
+def stage_cost(timings,total_seconds,retained):
+    """What each stage cost, and what the run cost per object it kept.
+
+    One run total cannot say which stage to make cheaper, and until the stages are separated a
+    claim about dataset-scale cost is a guess. `unattributed_seconds` is the remainder -- model
+    loading, image normalization, artifact writing -- and is reported rather than distributed,
+    because spreading it over the stages would invent attribution the measurement does not have.
+
+    Cost per object is reported against retained objects, not references: the reference is not
+    available at run time, and an annotator's price is what it charges for what it emits.
+    """
+    stages={name:round(seconds,6) for name,seconds in timings.items()}
+    accounted=sum(stages.values())
+    return {'stage_seconds':stages,'unattributed_seconds':round(total_seconds-accounted,6),
+            'seconds_per_retained_object':round(total_seconds/retained,6) if retained else None,
+            'retained_objects_per_hour':round(retained*3600/total_seconds,2) if total_seconds else None}
 
 
 def render_overlay(image,objects):
@@ -225,6 +243,43 @@ def consolidate(observations,ios_threshold,iou_threshold,rounds=2,fuse=True,onto
 DEFAULT_REFINE_IOU=0.7
 
 
+def verify_objects(objects,evidence,candidates,verifier,image,ontology,vocabulary_id,match_iou):
+    """Record whether an independent model detects something at each retained box.
+
+    Confirmation is evidence and not truth. Two models of overlapping lineage agree partly because
+    they fail alike, so this supports a one-sided reading only: a confirmed box has independent
+    support, an unconfirmed box is either absent or missed by the verifier, and nothing here
+    distinguishes those two. Acceptance may require confirmation; nothing is removed.
+    """
+    from .vocabulary import load_vocabulary,resolve_prompts
+    vocabulary=load_vocabulary(vocabulary_id) if vocabulary_id else None
+    resolution=resolve_prompts(ontology,vocabulary)
+    prompts={phrase:class_id for class_id,phrase in zip(resolution['classes'],resolution['prompts'])}
+    detections=verifier.detect(image,prompts)
+    records=[]
+    for obj,ev,candidate in zip(objects,evidence,(c for c in candidates if c['disposition']=='retained')):
+        best,best_iou=None,0.0
+        for d in detections:
+            value=iou(obj['bbox_xyxy'],d['bbox_xyxy'])
+            if value>=match_iou and value>best_iou: best,best_iou=d,value
+        record={'object':obj['id'],'confirmed':best is not None,
+                'verifier_label':best['label'] if best else None,
+                'verifier_score':round(best['score'],6) if best else None,
+                'overlap':round(best_iou,6) if best else None,
+                'label_agrees':bool(best and best['label']==obj['label']['id'])}
+        ev['verified']=record['confirmed'];ev['verifier_score']=record['verifier_score']
+        # The overlap that confirmed the box is also the only independent reading of its extent, so
+        # it travels into evidence rather than stopping at the candidate record.
+        ev['verifier_overlap']=record['overlap']
+        candidate['verification']=record
+        if not record['confirmed']:
+            obj['uncertainty']['reasons'].append('unconfirmed_by_independent_model')
+        records.append(record)
+    return {'detections':len(detections),'confirmed':sum(r['confirmed'] for r in records),
+            'objects':len(records),'match_iou':match_iou,
+            'independence':'shared_transformer_lineage; agreement is reproducibility, not confirmation'}
+
+
 def refine_objects(objects,evidence,candidates,refiner,image,tolerance,max_alternatives):
     """Replace proposed geometry with refined geometry, keeping the proposal inspectable.
 
@@ -286,6 +341,10 @@ def resolve_label(class_scores,ontology,ratio):
     if len(ranked)==1 or top_score<=0 or ranked[1][1]/top_score<ratio:
         return top,[],'specific_label_clear_of_runner_up'
     runner=ranked[1][0]
+    if co_occurring(ontology,top,runner):
+        # Both may be true of this region, so there is no conflict to resolve. Falling back here
+        # would discard a supported class to settle a disagreement that was never one.
+        return top,[top,runner],'co_occurring_classes_not_competing'
     ancestor=common_ancestor(ontology,top,runner)
     if ancestor in (top,runner):
         # One is an ancestor of the other; the broader of the pair is the supported claim.
@@ -338,7 +397,8 @@ def calibrated_probability(spec,value):
     return None
 
 
-ACCEPTANCE_DEFAULTS={'score':0.5,'min_views':2,'boundary_iou':0.8,'granularity_ios':0.7}
+ACCEPTANCE_DEFAULTS={'score':0.5,'min_views':2,'boundary_iou':0.8,'granularity_ios':0.7,
+                     'require_verification':False,'verifier_boundary_iou':None}
 
 
 def assess(objects,evidence,planned_views,rules):
@@ -358,9 +418,16 @@ def assess(objects,evidence,planned_views,rules):
     for index,(obj,ev) in enumerate(zip(objects,evidence)):
         reasons=[];states={}
         strong=ev['score']>=rules['score']
-        states['existence']='supported' if strong and ev['views']>=required_views else 'unresolved'
+        # Independent confirmation is evidence a second model saw something here. It is not truth,
+        # and an unconfirmed box may be absent or merely missed, so it withholds support rather
+        # than asserting the box is wrong.
+        unconfirmed=rules.get('require_verification') and ev.get('verified') is False
+        states['existence']='supported' if strong and ev['views']>=required_views and not unconfirmed else 'unresolved'
         if states['existence']=='supported':
             reasons.append(f'reproduced_in_{ev["views"]}_views' if ev['views']>1 else 'single_view_schedule')
+            if ev.get('verified'):reasons.append('confirmed_by_independent_model')
+        elif unconfirmed and strong and ev['views']>=required_views:
+            reasons.append('unconfirmed_by_independent_model')
         else:
             reasons.append('weak_score' if not strong else 'insufficient_view_agreement')
         states['class']='supported' if strong and ev['useful'] else 'unresolved'
@@ -369,6 +436,15 @@ def assess(objects,evidence,planned_views,rules):
             states['boundary']='unresolved';reasons.append('view_edge_truncation_unresolved')
         elif ev['alternatives'] and min(iou(obj['bbox_xyxy'],a) for a in ev['alternatives'])<rules['boundary_iou']:
             states['boundary']='unresolved';reasons.append('multi_view_boundary_disagreement')
+        elif (rules.get('verifier_boundary_iou') is not None and ev.get('verifier_overlap') is not None
+              and ev['verifier_overlap']<rules['verifier_boundary_iou']):
+            # Alternatives come from this detector's own views, so boundary support currently rests
+            # on one model agreeing with itself. Where a verifier confirmed the box, its own box is
+            # a second reading of the same extent, and disagreement there is boundary uncertainty by
+            # the same argument that makes multi-view disagreement one. It can only withhold
+            # support: the verifier's geometry never replaces the box, because refinement is the
+            # stage entitled to move geometry and it ran against pixels rather than against a vote.
+            states['boundary']='unresolved';reasons.append('verifier_extent_disagreement')
         else:
             states['boundary']='supported'
         # Count is not estimated: an `instance` is one object by construction, and no group
@@ -391,8 +467,13 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
              ontology_id=None,acceptance=None,name_ratio=DEFAULT_NAME_RATIO,
              merge_rounds=1,fuse_boxes_enabled=False,calibration=None,max_alternatives=8,
              refiner=None,refine_bundle=None,refine_iou=DEFAULT_REFINE_IOU,refine_tile_side=512,
-             merge_labels='common-ancestor',vocabulary_id=None):
+             merge_labels='common-ancestor',vocabulary_id=None,
+             verifier=None,verify_bundle=None,verify_iou=0.5,verify_threshold=0.3,
+             verify_prompt_batch=1):
     started=time.perf_counter()
+    # Per-stage wall time, because one total cannot say which stage to make cheaper. A stage that
+    # did not run is absent rather than zero: zero would read as free.
+    timings={}
     image,metadata=normalize_image(image_path)
     bundle=preflight(bundle_path)
     root=Path(output)
@@ -406,6 +487,9 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
     config={'profile':profile,'threshold':threshold,'verification':'none','device':device or 'auto',
             'tile_levels':tile_levels,'tile_overlap':tile_overlap,'merge_ios':merge_ios,'merge_iou':merge_iou,
             'planned_views':len(jobs),'max_alternatives':max_alternatives,'ontology':ontology['id'],'vocabulary':vocabulary_id,
+            'verify_bundle':str(Path(verify_bundle).resolve()) if verify_bundle else None,
+            'verify_iou':verify_iou,'verify_threshold':verify_threshold,
+            'verify_prompt_batch':verify_prompt_batch,
             'acceptance':rules,'name_ratio':name_ratio,
             'refine_bundle':str(Path(refine_bundle).resolve()) if refine_bundle else None,
             'refine_iou':refine_iou,'refine_tile_side':refine_tile_side,
@@ -415,17 +499,20 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
     manifest['sha256']=digest(canonical(manifest))
     artifacts['manifest']=write_artifact(root,'manifest.json',manifest)
     objects=[];evidence=[];candidates=[];observations=[];completed=[];failed=[]
-    error=None;capabilities=None;rounds_used=0;refinement=None;refiner_capabilities=None
+    error=None;capabilities=None;rounds_used=0;verification=None;verifier_capabilities=None;refinement=None;refiner_capabilities=None
     try:
         if adapter is None:
             from .adapters.owlv2 import Owlv2Adapter
             adapter=Owlv2Adapter(bundle_path,device=device,threshold=threshold,ontology_id=ontology['id'],
                                  vocabulary_id=vocabulary_id)
         capabilities=adapter.capabilities() if hasattr(adapter,'capabilities') else None
+        mark=time.perf_counter()
         observations,completed,failed=discover(adapter,image,jobs)
+        timings['discovery']=time.perf_counter()-mark
         labels={c['id']:c for c in ontology['classes']}
         for obs in observations:
             if obs['label'] not in labels:raise ValueError('adapter_invalid_label')
+        mark=time.perf_counter()
         name_observations(observations,ontology,name_ratio)
         groups,representatives,merge_reasons,rounds_used=consolidate(
             observations,merge_ios,merge_iou,rounds=merge_rounds,fuse=fuse_boxes_enabled,
@@ -466,13 +553,37 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
                 'uncertainty':{**uncertainty,'reasons':reasons},
                 'evidence_refs':['evidence/candidates.jsonl','evidence/coverage.json'],'relations':[],
                 'occluded':None,'truncated':None,'flag_evidence_refs':[],'count':None,'calibrated_estimates':[]})
+        timings['merge']=time.perf_counter()-mark
         if refine_bundle is not None and refiner is None:
             from .adapters.sam3 import Sam3Refiner
             refiner=Sam3Refiner(refine_bundle,device=device,tile_side=refine_tile_side)
         if refiner is not None and objects:
             refiner_capabilities=refiner.capabilities() if hasattr(refiner,'capabilities') else None
+            mark=time.perf_counter()
             refinement=refine_objects(objects,evidence,candidates,refiner,image,refine_iou,max_alternatives)
-        if rules is not None:assess(objects,evidence,len(jobs),rules)
+            timings['refine']=time.perf_counter()-mark
+        if verify_bundle is not None and verifier is None:
+            from .adapters.sam3 import Sam3Verifier
+            verifier=Sam3Verifier(verify_bundle,device=device,threshold=verify_threshold,
+                                  prompt_batch=verify_prompt_batch)
+        if verifier is not None and getattr(verifier,'threshold',verify_threshold)!=verify_threshold:
+            # A reused verifier carries its own threshold; the manifest records the argument. If the
+            # two disagree the run would claim an operating point it did not use.
+            raise ValueError('verifier_threshold_mismatch: '
+                             f'{getattr(verifier,"threshold")} loaded, {verify_threshold} declared')
+        if verifier is not None and objects:
+            verifier_capabilities=verifier.capabilities() if hasattr(verifier,'capabilities') else None
+            mark=time.perf_counter()
+            # A verifier reused across images keeps counting, so record this run's own passes.
+            before=dict(getattr(verifier,'stats',None) or {})
+            verification=verify_objects(objects,evidence,candidates,verifier,image,ontology,vocabulary_id,verify_iou)
+            timings['verify']=time.perf_counter()-mark
+            after=dict(getattr(verifier,'stats',None) or {})
+            if after:verification={**verification,'model_passes':{k:v-before.get(k,0) for k,v in after.items()}}
+        if rules is not None:
+            mark=time.perf_counter()
+            assess(objects,evidence,len(jobs),rules)
+            timings['accept']=time.perf_counter()-mark
         if calibration_spec is not None:
             for obj,ev in zip(objects,evidence):
                 probability=calibrated_probability(calibration_spec,ev['score'])
@@ -488,18 +599,27 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
     else:status='completed'
     search_status=status if error else ('failed' if failed else 'profile_complete')
     reason=('baseline_finished' if not failed else 'view_failures_prevent_complete_scan') if not error else error['type']
-    stage_resources={'wall_seconds':round(time.perf_counter()-started,6),'peak_rss_bytes':peak_rss_bytes(),
+    total_seconds=time.perf_counter()-started
+    stage_resources={'wall_seconds':round(total_seconds,6),'peak_rss_bytes':peak_rss_bytes(),
                      'model_calls':len(completed),'planned_views':len(jobs),'failed_views':len(failed),
                      'raw_observations':len(observations),'retained_objects':len(objects)}
-    events=[{'stage':'discovery','status':status,'error':error,'capabilities':capabilities,'resources':stage_resources},
+    cost=stage_cost(timings,total_seconds,len(objects))
+    events=[{'stage':'discovery','status':status,'error':error,'capabilities':capabilities,
+             'resources':stage_resources,'cost':{'wall_seconds':cost['stage_seconds'].get('discovery'),'model_calls':len(completed)}},
+            {'stage':'verification','status':status,'summary':verification,
+             'capabilities':verifier_capabilities,'resources':stage_resources,
+             'cost':{'wall_seconds':cost['stage_seconds'].get('verify'),
+                     'model_calls':(verification or {}).get('model_passes',{}).get('decoder_passes')}},
             {'stage':'merge','status':status,'observations':len(observations),'retained':len(objects),
              'acceptance_rule':rules,
              'rounds_used':rounds_used,'box_fusion':fuse_boxes_enabled,
              'rule':{'same_label_only':True,'iou_threshold':merge_iou,
-                     'ios_threshold':merge_ios,'ios_requires_view_edge':True},'resources':stage_resources},
+                     'ios_threshold':merge_ios,'ios_requires_view_edge':True},'resources':stage_resources,
+             'cost':{'wall_seconds':cost['stage_seconds'].get('merge'),'model_calls':0}},
             {'stage':'refine','status':status,'refinement':refinement,
-             'capabilities':refiner_capabilities,'resources':stage_resources},
-            {'stage':'terminal','status':status,'reason':reason,'resources':stage_resources}]
+             'capabilities':refiner_capabilities,'resources':stage_resources,
+             'cost':{'wall_seconds':cost['stage_seconds'].get('refine'),'model_calls':None}},
+            {'stage':'terminal','status':status,'reason':reason,'resources':stage_resources,'cost':cost}]
     artifacts['events']=write_artifact(root,'events.jsonl',b'\n'.join(canonical(e) for e in events)+b'\n','application/x-ndjson')
     artifacts['candidates']=write_artifact(root,'evidence/candidates.jsonl',b'\n'.join(canonical(c) for c in candidates)+b'\n','application/x-ndjson')
     done=[j for j in jobs if j['id'] in set(completed)]
@@ -523,7 +643,7 @@ def annotate(image_path,bundle_path,output,adapter=None,parent_run=None,
     coverage_summary={'planned_jobs':len(jobs),'completed_jobs':len(completed),'failed_jobs':len(failed),
                       'route_covered_area_fraction':coverage['route_covered_area_fraction']}
     # Evidence bytes only; annotation.json and its digest sidecar are written after this point.
-    resources={**stage_resources,'artifact_bytes':sum((root/a['path']).stat().st_size for a in artifacts.values())}
+    resources={**stage_resources,'artifact_bytes':sum((root/a['path']).stat().st_size for a in artifacts.values()),**cost}
     result={'schema_version':'lynceus.annotation/1.0','run_id':run_id,'image':metadata,'policy':identity(load_policy()),'ontology':identity(ontology),'manifest_ref':'manifest.json','qualification':{'id':None,'domain':'undeclared','status':'unqualified'},'execution':{'status':status,'reason':reason,'failure_refs':['events.jsonl'] if error else []},'search':{'profile_id':profile,'status':search_status,'mandatory_planned':len(jobs),'mandatory_completed':len(completed),'mandatory_failed':len(failed),'stable_rounds':0,'coverage_ref':'evidence/coverage.json','stop_rule':{'full_image_passes':1,'tile_levels':tile_levels,'tile_overlap':tile_overlap,'merge_ios':merge_ios,'merge_iou':merge_iou,'required_stable_rounds':0}},'objects':objects,'regions':regions,'summary':summarize(objects,regions,coverage_summary,resources,calibration_record),'artifacts':artifacts}
     result=validate_annotation(result,root)
     write_artifact(root,'annotation.json',result)

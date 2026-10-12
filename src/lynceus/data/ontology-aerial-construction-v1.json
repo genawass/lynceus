@@ -1,0 +1,92 @@
+{
+ "id": "aerial-construction-v1",
+ "version": "1.0",
+ "domain": "aerial construction-site monitoring; heavy equipment only",
+ "derivation": "The APOCE published category list (RF100-VL apoce-aerial-photographs-for-object-detection-of-construction-equipment), names taken verbatim with hyphens as spaces, fitted on nothing. construction equipment is the broader parent every machine can fall back to, the counterpart of vehicle in aerial-traffic-strict-v2. Declared before any APOCE prediction was seen.",
+ "excluded_by_convention": [
+  "people",
+  "cars and other road vehicles",
+  "buildings, scaffolding and structure under construction",
+  "materials and stockpiles"
+ ],
+ "classes": [
+  {
+   "id": "entity",
+   "name": "entity",
+   "synonyms": [],
+   "parent": null,
+   "useful": false
+  },
+  {
+   "id": "unknown_object",
+   "name": "unknown object",
+   "synonyms": [],
+   "parent": "entity",
+   "useful": false
+  },
+  {
+   "id": "stuff",
+   "name": "stuff",
+   "synonyms": [],
+   "parent": "entity",
+   "useful": false
+  },
+  {
+   "id": "construction_equipment",
+   "name": "construction equipment",
+   "synonyms": [],
+   "parent": "entity",
+   "useful": true
+  },
+  {
+   "id": "excavator",
+   "name": "excavator",
+   "synonyms": [],
+   "parent": "construction_equipment",
+   "useful": true
+  },
+  {
+   "id": "dump_truck",
+   "name": "dump truck",
+   "synonyms": [],
+   "parent": "construction_equipment",
+   "useful": true
+  },
+  {
+   "id": "tower_crane",
+   "name": "tower crane",
+   "synonyms": [],
+   "parent": "construction_equipment",
+   "useful": true
+  },
+  {
+   "id": "concrete_mixer",
+   "name": "concrete mixer",
+   "synonyms": [],
+   "parent": "construction_equipment",
+   "useful": true
+  },
+  {
+   "id": "bulldozer",
+   "name": "bulldozer",
+   "synonyms": [],
+   "parent": "construction_equipment",
+   "useful": true
+  },
+  {
+   "id": "piling_machine",
+   "name": "piling machine",
+   "synonyms": [],
+   "parent": "construction_equipment",
+   "useful": true
+  },
+  {
+   "id": "lifting_equipment",
+   "name": "lifting equipment",
+   "synonyms": [],
+   "parent": "construction_equipment",
+   "useful": true
+  }
+ ],
+ "co_occurring": []
+}

@@ -60,7 +60,14 @@ def check_dependencies(dependencies):
 # complete checkpoint looks like: OWLv2 ships a preprocessor config, SAM 3 a processor config.
 # Declaring the set per adapter keeps "complete" checkable rather than assumed.
 ADAPTER_ASSETS={'owlv2':{'config.json','preprocessor_config.json','tokenizer_config.json'},
-                'sam3':{'config.json','processor_config.json','tokenizer_config.json'}}
+                'sam3':{'config.json','processor_config.json','tokenizer_config.json'},
+                'grounding-dino':{'config.json','preprocessor_config.json','tokenizer_config.json'},
+                # A bare checkpoint rather than a served model directory, so the file set is empty
+                # and the weight suffix carries the completeness check instead.
+                'wedetect-uni':set()}
+# Weight files an adapter's checkpoint may arrive as. A `.pth` is a pickled state dict, so a
+# bundle carrying one is only as trustworthy as its hash -- which is exactly what preflight checks.
+WEIGHT_SUFFIXES=('.safetensors','.bin','.pth')
 
 
 def preflight(path):
@@ -80,9 +87,12 @@ def preflight(path):
     listed={safe_path(root,a['path']) for a in assets}
     for name in required:
         if model_dir/name not in listed:raise BundleError('missing_asset: '+name)
-    if not any(p.suffix in ['.safetensors','.bin'] for p in listed):raise BundleError('missing_model_weights')
+    if not any(p.suffix in WEIGHT_SUFFIXES for p in listed):raise BundleError('missing_model_weights')
     actual={p.resolve() for p in model_dir.rglob('*') if p.is_file()}
     if actual-listed:raise BundleError('unmanifested_model_assets')
     runtime=check_dependencies(manifest.get('dependencies',{}))
-    capabilities=['single_pass_uncertain_proposals'] if manifest['adapter']=='owlv2' else ['box_prompted_boundary_refinement']
+    capabilities={'owlv2':['single_pass_uncertain_proposals'],
+                  'sam3':['box_prompted_boundary_refinement','text_prompted_verification'],
+                  'grounding-dino':['text_prompted_verification'],
+                  'wedetect-uni':['class_agnostic_proposals']}[manifest['adapter']]
     return {'manifest':manifest,'manifest_sha256':digest(path.read_bytes()),'model_dir':str(model_dir),'adapter':manifest['adapter'],'capabilities':capabilities,'verified_assets':len(assets),'runtime_versions':runtime}

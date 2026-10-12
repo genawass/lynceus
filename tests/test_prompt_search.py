@@ -6,16 +6,29 @@ from lynceus.prompt_search import coordinate_ascent, objective, score_vocabulary
 
 def test_the_objective_rewards_neither_flooding_nor_silence():
     eligible = 100
-    balanced = objective({'matched': 50, 'retained': 60}, eligible)
-    flooding = objective({'matched': 60, 'retained': 2000}, eligible)
-    silent = objective({'matched': 3, 'retained': 3}, eligible)
+    balanced = objective({'named': 50, 'retained': 60}, eligible)
+    flooding = objective({'named': 60, 'retained': 2000}, eligible)
+    silent = objective({'named': 3, 'retained': 3}, eligible)
     assert balanced > flooding
     assert balanced > silent
 
 
+def test_the_objective_counts_correctly_labelled_finds_not_merely_localized_ones():
+    """A class-agnostic objective was measured and rejected: it bought localization by abstaining.
+
+    A vocabulary that localizes everything and names nothing must score zero, or the search will
+    find it.
+    """
+    eligible = 100
+    localizes_but_abstains = objective({'matched': 90, 'named': 0, 'retained': 100}, eligible)
+    names_fewer_correctly = objective({'matched': 40, 'named': 40, 'retained': 100}, eligible)
+    assert localizes_but_abstains == 0.0
+    assert names_fewer_correctly > 0.0
+
+
 def test_the_objective_is_zero_when_nothing_is_found():
-    assert objective({'matched': 0, 'retained': 500}, 100) == 0.0
-    assert objective({'matched': 0, 'retained': 0}, 100) == 0.0
+    assert objective({'named': 0, 'retained': 500}, 100) == 0.0
+    assert objective({'named': 0, 'retained': 0}, 100) == 0.0
 
 
 def test_the_search_adopts_only_changes_that_improve_the_whole_vocabulary():
@@ -88,6 +101,8 @@ def test_scoring_uses_cached_features_and_counts_only_permitted_labels():
     report = score_vocabulary([view], ('a',), ['car', 'person'], references, threshold=0.5)
     assert report['matched'] == 2 and report['retained'] == 2
     assert report['recall'] == 1.0 and report['precision'] == 1.0
+    # Both are exact boxes under permitted labels, so both count at the tight threshold too.
+    assert report['named'] == 2 and report['useful_label_coverage'] == 1.0
     assert report['per_class']['car']['matched'] == 1
     assert report['per_class']['person']['matched'] == 1
 
@@ -98,6 +113,7 @@ def test_a_box_matching_a_reference_under_the_wrong_class_is_not_a_class_match()
     view = FakeView('img', boxes, {('a',): np.array([[0.2, 0.9]])}).as_view()
     references = {'img': [{'bbox_xyxy': [0., 0., 10., 10.], 'permitted_labels': ['car']}]}
     report = score_vocabulary([view], ('a',), ['car', 'person'], references, threshold=0.5)
-    # Localized, so it counts as matched overall, but not as a match for the class it claimed.
+    # Localized, so it counts as matched overall, but not as a correctly labelled find.
     assert report['matched'] == 1
+    assert report['named'] == 0
     assert report['per_class']['person']['matched'] == 0

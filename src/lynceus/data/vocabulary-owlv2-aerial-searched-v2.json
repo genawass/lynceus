@@ -1,0 +1,480 @@
+{
+ "id": "owlv2-aerial-searched-v2",
+ "version": "1.0",
+ "adapter": "owlv2",
+ "ontology": "aerial-traffic-strict-v1",
+ "derivation": "Coordinate ascent over per-class phrasings, scored on the whole vocabulary because the emitted label is the class that wins over all prompts. Cached image features make each candidate exact and cheap.",
+ "fitted_on": {
+  "panel": "VisDrone2019-DET val",
+  "seed": 0,
+  "images": 10,
+  "eligible_references": 827,
+  "split": "development",
+  "tile_levels": 1,
+  "threshold": 0.1,
+  "date": "2026-09-21"
+ },
+ "objective": "harmonic mean of localized recall and precision over the development panel",
+ "baseline_score": 0.12979,
+ "development_score": 0.185662,
+ "candidates": {
+  "person": [
+   "person",
+   "pedestrian",
+   "a person walking",
+   "person seen from above",
+   "aerial view of a person"
+  ],
+  "vehicle": [
+   "vehicle",
+   "a vehicle",
+   "vehicle seen from above",
+   "aerial view of a vehicle"
+  ],
+  "car": [
+   "car",
+   "a car",
+   "car seen from above",
+   "aerial view of a car",
+   "parked car"
+  ],
+  "van": [
+   "van",
+   "a van",
+   "delivery van",
+   "van seen from above"
+  ],
+  "truck": [
+   "truck",
+   "a truck",
+   "lorry",
+   "truck seen from above"
+  ],
+  "bus": [
+   "bus",
+   "a bus",
+   "city bus",
+   "bus seen from above"
+  ],
+  "motorcycle": [
+   "motorcycle",
+   "a motorcycle",
+   "motorbike",
+   "scooter",
+   "motorcycle seen from above"
+  ],
+  "bicycle": [
+   "bicycle",
+   "a bicycle",
+   "bike",
+   "cyclist",
+   "bicycle seen from above"
+  ],
+  "tricycle": [
+   "tricycle",
+   "a tricycle",
+   "three wheeled vehicle",
+   "rickshaw"
+  ]
+ },
+ "search_trace": [
+  {
+   "step": "baseline",
+   "vocabulary": {
+    "person": "person",
+    "vehicle": "vehicle",
+    "car": "car",
+    "van": "van",
+    "truck": "truck",
+    "bus": "bus",
+    "motorcycle": "motorcycle",
+    "bicycle": "bicycle",
+    "tricycle": "tricycle"
+   },
+   "score": 0.12979
+  },
+  {
+   "step": "round0:person",
+   "phrase": "pedestrian",
+   "score": 0.098,
+   "adopted": false
+  },
+  {
+   "step": "round0:person",
+   "phrase": "a person walking",
+   "score": 0.119606,
+   "adopted": false
+  },
+  {
+   "step": "round0:person",
+   "phrase": "person seen from above",
+   "score": 0.130825,
+   "adopted": true
+  },
+  {
+   "step": "round0:person",
+   "phrase": "aerial view of a person",
+   "score": 0.130726,
+   "adopted": false
+  },
+  {
+   "step": "round0:vehicle",
+   "phrase": "a vehicle",
+   "score": 0.131606,
+   "adopted": true
+  },
+  {
+   "step": "round0:vehicle",
+   "phrase": "vehicle seen from above",
+   "score": 0.130263,
+   "adopted": false
+  },
+  {
+   "step": "round0:vehicle",
+   "phrase": "aerial view of a vehicle",
+   "score": 0.13018,
+   "adopted": false
+  },
+  {
+   "step": "round0:car",
+   "phrase": "a car",
+   "score": 0.135996,
+   "adopted": true
+  },
+  {
+   "step": "round0:car",
+   "phrase": "car seen from above",
+   "score": 0.125374,
+   "adopted": false
+  },
+  {
+   "step": "round0:car",
+   "phrase": "aerial view of a car",
+   "score": 0.127179,
+   "adopted": false
+  },
+  {
+   "step": "round0:car",
+   "phrase": "parked car",
+   "score": 0.135468,
+   "adopted": false
+  },
+  {
+   "step": "round0:van",
+   "phrase": "a van",
+   "score": 0.139426,
+   "adopted": true
+  },
+  {
+   "step": "round0:van",
+   "phrase": "delivery van",
+   "score": 0.138068,
+   "adopted": false
+  },
+  {
+   "step": "round0:van",
+   "phrase": "van seen from above",
+   "score": 0.138889,
+   "adopted": false
+  },
+  {
+   "step": "round0:truck",
+   "phrase": "a truck",
+   "score": 0.139526,
+   "adopted": true
+  },
+  {
+   "step": "round0:truck",
+   "phrase": "lorry",
+   "score": 0.139526,
+   "adopted": false
+  },
+  {
+   "step": "round0:truck",
+   "phrase": "truck seen from above",
+   "score": 0.139501,
+   "adopted": false
+  },
+  {
+   "step": "round0:bus",
+   "phrase": "a bus",
+   "score": 0.140389,
+   "adopted": true
+  },
+  {
+   "step": "round0:bus",
+   "phrase": "city bus",
+   "score": 0.140415,
+   "adopted": true
+  },
+  {
+   "step": "round0:bus",
+   "phrase": "bus seen from above",
+   "score": 0.140338,
+   "adopted": false
+  },
+  {
+   "step": "round0:motorcycle",
+   "phrase": "a motorcycle",
+   "score": 0.142152,
+   "adopted": true
+  },
+  {
+   "step": "round0:motorcycle",
+   "phrase": "motorbike",
+   "score": 0.142001,
+   "adopted": false
+  },
+  {
+   "step": "round0:motorcycle",
+   "phrase": "scooter",
+   "score": 0.143119,
+   "adopted": true
+  },
+  {
+   "step": "round0:motorcycle",
+   "phrase": "motorcycle seen from above",
+   "score": 0.140165,
+   "adopted": false
+  },
+  {
+   "step": "round0:bicycle",
+   "phrase": "a bicycle",
+   "score": 0.147384,
+   "adopted": true
+  },
+  {
+   "step": "round0:bicycle",
+   "phrase": "bike",
+   "score": 0.153173,
+   "adopted": true
+  },
+  {
+   "step": "round0:bicycle",
+   "phrase": "cyclist",
+   "score": 0.151454,
+   "adopted": false
+  },
+  {
+   "step": "round0:bicycle",
+   "phrase": "bicycle seen from above",
+   "score": 0.157905,
+   "adopted": true
+  },
+  {
+   "step": "round0:tricycle",
+   "phrase": "a tricycle",
+   "score": 0.156194,
+   "adopted": false
+  },
+  {
+   "step": "round0:tricycle",
+   "phrase": "three wheeled vehicle",
+   "score": 0.160915,
+   "adopted": true
+  },
+  {
+   "step": "round0:tricycle",
+   "phrase": "rickshaw",
+   "score": 0.153485,
+   "adopted": false
+  },
+  {
+   "step": "round1:person",
+   "phrase": "person",
+   "score": 0.159487,
+   "adopted": false
+  },
+  {
+   "step": "round1:person",
+   "phrase": "pedestrian",
+   "score": 0.109144,
+   "adopted": false
+  },
+  {
+   "step": "round1:person",
+   "phrase": "a person walking",
+   "score": 0.140363,
+   "adopted": false
+  },
+  {
+   "step": "round1:person",
+   "phrase": "aerial view of a person",
+   "score": 0.162332,
+   "adopted": true
+  },
+  {
+   "step": "round1:vehicle",
+   "phrase": "vehicle",
+   "score": 0.160166,
+   "adopted": false
+  },
+  {
+   "step": "round1:vehicle",
+   "phrase": "vehicle seen from above",
+   "score": 0.159751,
+   "adopted": false
+  },
+  {
+   "step": "round1:vehicle",
+   "phrase": "aerial view of a vehicle",
+   "score": 0.160302,
+   "adopted": false
+  },
+  {
+   "step": "round1:car",
+   "phrase": "car",
+   "score": 0.155255,
+   "adopted": false
+  },
+  {
+   "step": "round1:car",
+   "phrase": "car seen from above",
+   "score": 0.167221,
+   "adopted": true
+  },
+  {
+   "step": "round1:car",
+   "phrase": "aerial view of a car",
+   "score": 0.172033,
+   "adopted": true
+  },
+  {
+   "step": "round1:car",
+   "phrase": "parked car",
+   "score": 0.165293,
+   "adopted": false
+  },
+  {
+   "step": "round1:van",
+   "phrase": "van",
+   "score": 0.149899,
+   "adopted": false
+  },
+  {
+   "step": "round1:van",
+   "phrase": "delivery van",
+   "score": 0.185032,
+   "adopted": true
+  },
+  {
+   "step": "round1:van",
+   "phrase": "van seen from above",
+   "score": 0.185576,
+   "adopted": true
+  },
+  {
+   "step": "round1:truck",
+   "phrase": "truck",
+   "score": 0.185321,
+   "adopted": false
+  },
+  {
+   "step": "round1:truck",
+   "phrase": "lorry",
+   "score": 0.185576,
+   "adopted": false
+  },
+  {
+   "step": "round1:truck",
+   "phrase": "truck seen from above",
+   "score": 0.185576,
+   "adopted": false
+  },
+  {
+   "step": "round1:bus",
+   "phrase": "bus",
+   "score": 0.183432,
+   "adopted": false
+  },
+  {
+   "step": "round1:bus",
+   "phrase": "a bus",
+   "score": 0.185449,
+   "adopted": false
+  },
+  {
+   "step": "round1:bus",
+   "phrase": "bus seen from above",
+   "score": 0.185662,
+   "adopted": true
+  },
+  {
+   "step": "round1:motorcycle",
+   "phrase": "motorcycle",
+   "score": 0.180834,
+   "adopted": false
+  },
+  {
+   "step": "round1:motorcycle",
+   "phrase": "a motorcycle",
+   "score": 0.183771,
+   "adopted": false
+  },
+  {
+   "step": "round1:motorcycle",
+   "phrase": "motorbike",
+   "score": 0.180103,
+   "adopted": false
+  },
+  {
+   "step": "round1:motorcycle",
+   "phrase": "motorcycle seen from above",
+   "score": 0.184247,
+   "adopted": false
+  },
+  {
+   "step": "round1:bicycle",
+   "phrase": "bicycle",
+   "score": 0.164614,
+   "adopted": false
+  },
+  {
+   "step": "round1:bicycle",
+   "phrase": "a bicycle",
+   "score": 0.172108,
+   "adopted": false
+  },
+  {
+   "step": "round1:bicycle",
+   "phrase": "bike",
+   "score": 0.178928,
+   "adopted": false
+  },
+  {
+   "step": "round1:bicycle",
+   "phrase": "cyclist",
+   "score": 0.179298,
+   "adopted": false
+  },
+  {
+   "step": "round1:tricycle",
+   "phrase": "tricycle",
+   "score": 0.181736,
+   "adopted": false
+  },
+  {
+   "step": "round1:tricycle",
+   "phrase": "a tricycle",
+   "score": 0.178708,
+   "adopted": false
+  },
+  {
+   "step": "round1:tricycle",
+   "phrase": "rickshaw",
+   "score": 0.175661,
+   "adopted": false
+  }
+ ],
+ "prompts": {
+  "person": "aerial view of a person",
+  "vehicle": "a vehicle",
+  "car": "aerial view of a car",
+  "van": "van seen from above",
+  "truck": "a truck",
+  "bus": "bus seen from above",
+  "motorcycle": "scooter",
+  "bicycle": "bicycle seen from above",
+  "tricycle": "three wheeled vehicle"
+ }
+}

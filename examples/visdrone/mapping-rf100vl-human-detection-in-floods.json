@@ -1,0 +1,30 @@
+{
+ "frozen": true,
+ "declared_before_predictions_seen": true,
+ "ontology": "aerial-traffic-strict-v2",
+ "domain": "aerial_drone",
+ "split": "evaluation",
+ "selection_rule": "sorted(basename for images/val/*.jpg), random.Random(seed).sample(files, count), sorted",
+ "mapping_rule": "Each category permits its exact ontology counterpart plus the broader parent vehicle where one exists; categories outside the ontology are ineligible, not errors.",
+ "id": "rf100vl-human-detection-in-floods-test-aerial-strict-v2",
+ "reference": "RF100-VL human-detection-in-floods, test split (probicheaux/rf100-vl @ 6b59bae)",
+ "reference_root": "/home/genadiy/data/rf100-vl/visdrone-layout/human-detection-in-floods",
+ "categories": {
+  "0": {
+   "name": "human",
+   "permitted_labels": [
+    "person"
+   ]
+  },
+  "1": {
+   "name": "wind-sup-board",
+   "eligible": false,
+   "reason": "outside_ontology"
+  }
+ },
+ "known_limitations": [
+  "People only; every vehicle the annotator finds counts as unmatched, so precision is a loose bound.",
+  "4K frames: the frozen L1 tile plan gives coarser tiles than on VisDrone.",
+  "Boards are outside the ontology and excluded from denominators."
+ ]
+}
