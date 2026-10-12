@@ -26,32 +26,97 @@
     "split": "val.txt",
     "images": 548,
     "labels": "the dataset's own human labels",
-    "metrics": ["mAP50", "mAP50-95", "precision", "recall"],
+    "metrics": [
+      "mAP50",
+      "mAP50-95",
+      "precision",
+      "recall"
+    ],
     "reported_as": "the auto arm as a fraction of the human arm"
   },
   "class_mapping": {
     "rule": "the dataset's own three-class convention, verified box-for-box against labels/{split} on 60 sampled images before any arm was built",
-    "visdrone_to_dataset": {"1": "person", "2": "person", "4": "car", "5": "car", "6": "longvehicle", "9": "longvehicle"},
-    "visdrone_dropped": [0, 3, 7, 8, 10, 11],
+    "visdrone_to_dataset": {
+      "1": "person",
+      "2": "person",
+      "4": "car",
+      "5": "car",
+      "6": "longvehicle",
+      "9": "longvehicle"
+    },
+    "visdrone_dropped": [
+      0,
+      3,
+      7,
+      8,
+      10,
+      11
+    ],
     "dropped_meaning": "ignored regions, bicycle, tricycle, awning-tricycle, motor and others are unlabelled in this layout, so they are background for the human arm too",
-    "ontology_to_dataset": {"person": "person", "car": "car", "van": "car", "truck": "longvehicle", "bus": "longvehicle"},
-    "ontology_dropped": ["motorcycle", "bicycle", "tricycle", "unknown_object", "stuff", "entity"],
+    "ontology_to_dataset": {
+      "person": "person",
+      "car": "car",
+      "van": "car",
+      "truck": "longvehicle",
+      "bus": "longvehicle"
+    },
+    "ontology_dropped": [
+      "motorcycle",
+      "bicycle",
+      "tricycle",
+      "unknown_object",
+      "stuff",
+      "entity"
+    ],
     "ontology_dropped_reason": "emitting a class the human arm leaves as background would penalise the auto arm for labelling what the reference declines to label, which measures the convention and not the labels"
   },
   "parent_fallback_policies": {
     "why": "conservative naming emits the parent `vehicle` on 64.7% of matched boxes on the held-out panel, and `vehicle` has no single counterpart among car and longvehicle. How that fallback is resolved is therefore a declared label policy and not an implementation detail.",
     "drop": "boxes labelled `vehicle` are omitted, so only exactly-named boxes train",
     "verifier_label": "a `vehicle` box takes the verifier's own label where that label maps, and is omitted otherwise; this is the parent-refinement measurement that was flagged as the obvious next step and is priced here rather than asserted",
-    "modal": "every `vehicle` box becomes `car`, the modal class, which is the prior a labeller with no further evidence would use"
+    "modal": "every `vehicle` box becomes `car`, the modal class, which is the prior a labeller with no further evidence would use",
+    "retrieval": "a `vehicle` box takes the class its nearest neighbours carry in a bank of human-labelled reference crops from the training split, excluding every sequence the labelled images belong to; added after the panel naming table showed retrieval resolves 0.547 of fallbacks into usable consumer classes against the verifier's 0.357 at 0.135 wrong against 0.036, which a naming table cannot adjudicate because a wrong child label and an absent one cost a consumer differently"
   },
   "arms": [
-    {"id": "human", "labels": "the dataset's own human labels for the same 200 images"},
-    {"id": "auto-unfiltered-verifier_label", "verify_threshold": null, "policy": "verifier_label"},
-    {"id": "auto-0.300-verifier_label", "verify_threshold": 0.3, "policy": "verifier_label"},
-    {"id": "auto-0.392-verifier_label", "verify_threshold": 0.392, "policy": "verifier_label"},
-    {"id": "auto-0.461-verifier_label", "verify_threshold": 0.461, "policy": "verifier_label"},
-    {"id": "auto-0.392-drop", "verify_threshold": 0.392, "policy": "drop"},
-    {"id": "auto-0.392-modal", "verify_threshold": 0.392, "policy": "modal"}
+    {
+      "id": "human",
+      "labels": "the dataset's own human labels for the same 200 images"
+    },
+    {
+      "id": "auto-unfiltered-verifier_label",
+      "verify_threshold": null,
+      "policy": "verifier_label"
+    },
+    {
+      "id": "auto-0.300-verifier_label",
+      "verify_threshold": 0.3,
+      "policy": "verifier_label"
+    },
+    {
+      "id": "auto-0.392-verifier_label",
+      "verify_threshold": 0.392,
+      "policy": "verifier_label"
+    },
+    {
+      "id": "auto-0.461-verifier_label",
+      "verify_threshold": 0.461,
+      "policy": "verifier_label"
+    },
+    {
+      "id": "auto-0.392-drop",
+      "verify_threshold": 0.392,
+      "policy": "drop"
+    },
+    {
+      "id": "auto-0.392-modal",
+      "verify_threshold": 0.392,
+      "policy": "modal"
+    },
+    {
+      "id": "auto-0.392-retrieval",
+      "verify_threshold": 0.392,
+      "policy": "retrieval"
+    }
   ],
   "student": {
     "architecture": "yolo11n",
@@ -59,7 +124,9 @@
     "imgsz": 960,
     "epochs": 80,
     "batch": 8,
-    "seeds": [1],
+    "seeds": [
+      1
+    ],
     "identical_across_arms": "images, image count, architecture, weights, hyperparameters, seed and the val split; only the training labels differ",
     "additional_seeds_rule": "further seeds are added to every arm or to none, so a seed is never spent on the arm that happens to be ahead"
   },
@@ -68,5 +135,13 @@
     "200 images and one architecture is a direction, not a gate, and VisDrone remains outside assumption A4",
     "ultralytics has no ignore-region support, so a region this pipeline records as unsearched or unresolved trains as background; the export writes those regions to a sidecar and the count is reported rather than hidden",
     "COCO-pretrained initialisation means both arms start from a model that has seen external data; the comparison between arms is unaffected because it is identical for both"
+  ],
+  "amendments": [
+    {
+      "added": "2026-10-12",
+      "arm": "auto-0.392-retrieval",
+      "declared_before_its_own_measurement": true,
+      "not_part_of_the_frozen_protocol": "the threshold ladder and the three original fallback policies were declared before any label existed; this arm was declared after seeing the panel naming table and before any student was trained on it, and is reported as the later addition it is"
+    }
   ]
 }

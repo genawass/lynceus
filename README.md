@@ -247,6 +247,14 @@ python examples/visdrone/train_students.py --arms arms/ --weights yolo11n.pt --o
 python examples/visdrone/student_report.py --results students.json --export arms/export.json
 ```
 
+Measured on two seeds: auto-labels reach **0.911 of human downstream mAP50** and 0.891 of mAP50-95
+in the best arm. Verification is worth 0.029 of mAP50 against a seed spread of 0.002, and the fitted
+threshold 0.392 beats the stricter 0.461, so a threshold that improves the label-precision *bound*
+made the trained model worse. How the parent fallback `vehicle` is resolved matters more than the
+threshold: dropping those boxes costs 0.46 of human performance, the modal class destroys
+`longvehicle`, the verifier's label keeps it, and retrieval over a bank of human-labelled crops
+([`retrieval_labels.py`](examples/visdrone/retrieval_labels.py)) is best overall.
+
 Every arm sees the same images, architecture, weights, hyperparameters and seed, so what moves
 between arms is the labels. The export carries no ignore semantics into the trainer, so a region
 this pipeline records as unresolved trains as background and the sidecar counts them.

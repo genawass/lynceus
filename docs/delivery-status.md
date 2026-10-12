@@ -1410,3 +1410,139 @@ either order; they are auditing existence.
 
 What this does not measure is a correction loop, because none exists: nothing here writes a
 reviewer's decision back. The order is the half of WP-12 that can be built and measured without one.
+
+## Measured: what a model trained on these labels is worth
+
+Precision against VisDrone is a bound and this report has said so a dozen times: an unmatched box is
+either a real object the dataset omits or a false positive, and four verifiers did not separate them.
+A model trained on the labels does not need them separated. A real omitted object raises its score and
+a false box lowers it, so training prices exactly the population the reference cannot adjudicate --
+without an exhaustive panel, which is the obstacle every earlier section ran into.
+
+[`student-protocol.json`](../examples/visdrone/student-protocol.json) was frozen before any label
+existed: 200 train-split images selected by a declared rule with sequence-level exclusion against
+val, the dataset's own three-class convention verified box-for-box against its label files on 60
+sampled images, and one arm per verifier threshold and parent-fallback policy. Labelling the slice in
+the recommended configuration took 11178s, 55.9s per image. Every arm then trains the same
+COCO-pretrained yolo11n on the same 200 images with the same hyperparameters and seed, and is scored
+on all 548 val images against human labels. Two seeds, because a spread wider than the gap between
+two arms means those arms are not separated.
+
+| arm | boxes | mAP50 | mAP50-95 | share of human mAP50 | seed spread |
+|---|---|---|---|---|---|
+| human labels | 8149 | 0.4702 | 0.2750 | 1.000 | 0.0006 |
+| auto, 0.392, parent fallback → retrieval | 8507 | **0.4284** | **0.2450** | **0.911** | 0.0062 |
+| auto, verifier threshold **0.392** | 6349 | 0.4223 | 0.2297 | 0.898 | 0.0021 |
+| auto, threshold 0.300 | 7792 | 0.4127 | 0.2236 | 0.878 | 0.0115 |
+| auto, threshold 0.461 | 5749 | 0.4122 | 0.2257 | 0.877 | 0.0022 |
+| auto, 0.392, parent fallback → modal class | 10042 | 0.4085 | **0.2355** | 0.869 | 0.0017 |
+| auto, no verification at all | 10323 | 0.3934 | 0.2128 | 0.837 | 0.0007 |
+| auto, 0.392, parent fallback dropped | 2800 | 0.2060 | 0.0911 | 0.438 | 0.0085 |
+
+**Auto-labels reach 0.911 of human downstream performance at mAP50 and 0.891 at mAP50-95** in the
+best arm, 0.898 and 0.835 under the originally frozen set. That is the first number in this delivery
+that prices the labels rather than bounding them, and it sits inside the 90-95% the auto-labelling
+literature claims for simpler datasets.
+
+**Verification is worth 0.029 of mAP50**, 0.3934 to 0.4223, far outside a seed spread of 0.002. The
+precision gain it was adopted for was a bound; this is not.
+
+**The fitted threshold is at or near the downstream peak, and the stricter point is past it.** The
+published warning -- that downstream performance peaks at moderate confidence and degrades above it
+-- shows up here as 0.461 scoring 0.4122 against 0.392's 0.4223, a gap of 0.010 against spreads of
+0.002. Label-level precision orders those two the other way round: 0.461 keeps fewer boxes at a
+higher precision bound and makes the trained model worse. Between 0.300 and 0.392 the gap is 0.010
+and the 0.300 arm's own seed spread is 0.0115, so **this experiment does not separate them** and the
+peak is located only to within that interval.
+
+### The parent fallback is the expensive decision, and the verifier's label is the right way to make it
+
+Conservative naming emits `vehicle` on 64.7% of matched boxes, which no consumer schema accepts
+directly. Resolving it is a declared policy, and the three policies are 0.46 apart:
+
+| policy at threshold 0.392 | mAP50 | person | car | longvehicle |
+|---|---|---|---|---|
+| retrieval over a crop bank | **0.4284** | 0.3686 | **0.7274** | 0.1894 |
+| verifier's label | 0.4223 | 0.3815 | 0.6606 | **0.2280** |
+| modal class (`vehicle` → `car`) | 0.4085 | 0.3633 | **0.6806** | 0.1791 |
+| dropped | 0.2060 | 0.3886 | 0.1510 | 0.0912 |
+| human labels | 0.4702 | 0.3835 | 0.7591 | 0.2671 |
+
+`person` needs no fallback and the auto arms match human on it almost exactly, 0.3815 against 0.3835.
+The entire gap to human is vehicles. The modal policy wins on `car`, which is what the confusion
+table predicts -- 241 of the 374 matched fallback boxes are cars -- and destroys `longvehicle` by
+relabelling trucks and buses as cars, 0.1791 against 0.2280. Using the verifier's label keeps that
+distinction and is the better policy by 0.014 of mAP50, outside both spreads. It is also the measured
+answer to a question this report left open: the verifier's label *is* worth using to refine a parent
+fallback.
+
+Dropping the fallback is catastrophic: it removes 7242 of about 10000 boxes, the student never sees
+enough cars, and `car` collapses from 0.66 to 0.15. Abstention is cheap in a report and expensive in
+a training set.
+
+One inversion is worth keeping: the modal policy is *better* at mAP50-95, 0.2355 against 0.2297,
+while losing at mAP50. It trades class correctness for keeping every well-localized car box, and the
+two metrics weigh that trade differently.
+
+### Retrieval resolves the fallback better than either, and was declared after the others
+
+A fourth policy was added after the naming table below and before any student saw it, which the
+protocol records as the later addition it is: resolve `vehicle` by the class its nearest neighbours
+carry in a bank of human-labelled crops. It is the best auto arm on both metrics -- 0.4284 and
+0.2450, against the verifier label's 0.4223 and 0.2297 -- and the gain is concentrated exactly where
+the naming table predicted, `car` at 0.7274 against 0.6606 and against human's 0.7591. At mAP50 its
+seed spread of 0.0062 is as large as its 0.0061 lead, so **mAP50 does not separate it from the
+verifier label**; at mAP50-95 the lead is 0.0153 against spreads of 0.005 and it does.
+
+Its weakness is the same as modal's and for the same reason: `longvehicle` falls to 0.1894, because
+retrieval reads a truck as a car far more often than SAM 3 names it one. The two signals are
+complementary rather than ranked, which is a measurement and not yet a rule.
+
+### What this does not establish
+
+The student is scored against the same three-class human labels, so it measures consumer utility
+under VisDrone's conventions and not truth: a real object this dataset never labels still counts
+against the arm that labels it, which is why the auto arms are penalised for the bicycles, motors and
+tricycles they correctly find and the mapping then discards. It is 200 images, one architecture, two
+seeds, and VisDrone remains outside assumption A4 -- a direction, not a gate. And the trainer has no
+ignore semantics, so regions this pipeline records as unresolved train as background; the export
+counts them rather than hiding it.
+
+## Measured: naming by retrieval, and the schema the score is read in
+
+The verifier's label was one candidate for refining a parent fallback. Retrieval is the other: embed
+the crop with a local CLIP tower and take the class its nearest neighbours carry in a bank of
+human-labelled reference crops. It cannot invent a class -- it emits only what the bank holds -- and
+the bank excludes every sequence the scored images belong to, so no crop can be its own neighbour.
+The bank here is 1600 crops over eight classes drawn from 149 training images.
+
+Held-out panel, 624 matched boxes, 415 of them named `vehicle` by the pipeline. Three namings on
+identical boxes, scored against the reference's exact class, a parent the mapping permits, or neither:
+
+| the 415 parent-fallback boxes | exact | broader | wrong | absent |
+|---|---|---|---|---|
+| pipeline label | — | 0.974 | 0.027 | — |
+| SAM 3's label | 0.439 | 0.429 | 0.111 | 0.022 |
+| retrieval | **0.504** | — | 0.496 | — |
+
+Read that way retrieval looks reckless: half its labels are wrong against the ontology, because it
+always commits and has no `vehicle` to fall back on. But the ontology is not the schema a consumer
+receives, and this dataset's own three classes merge car with van and truck with bus and leave
+bicycle, motor and tricycle unlabelled entirely. Scoring the same boxes in that schema:
+
+| the same 415 boxes, consumer schema | usable and correct | wrong | correctly outside the schema | no label exported |
+|---|---|---|---|---|
+| pipeline label (`vehicle`) | 0 | 0 | 0.280 | 0.720 |
+| SAM 3's label | 0.357 | 0.036 | 0.265 | 0.342 |
+| retrieval | **0.547** | 0.135 | 0.227 | 0.092 |
+
+Most of retrieval's "wrong" is `car` read as `van`, which that consumer merges, and `motor` read as
+`bicycle`, which it drops either way. So retrieval exports a usable class for 68% of fallbacks
+against the verifier's 39%, at 0.135 wrong against 0.036. Neither table settles which trade is
+better, because a wrong child label and an absent one cost a consumer differently -- which is why
+the student experiment above was given a retrieval arm, and why that arm wins.
+
+Its residual confusion is fine-grained and systematic: of 240 fallback boxes over cars, retrieval
+calls 142 cars, 59 vans, 19 trucks, 11 tricycles and 9 bicycles. Car against van at twenty pixels is
+not obviously decidable from these crops at all, and the consumer schema is the only reason it does
+not matter here.

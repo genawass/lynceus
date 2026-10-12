@@ -27,7 +27,7 @@ def to_yolo(box, width, height, index):
             f'{(x2 - x1) / width:.6f} {(y2 - y1) / height:.6f}')
 
 
-def arm_label(obj, verification, mapping, policy):
+def arm_label(obj, verification, mapping, policy, retrieved=None):
     """The dataset class this object trains as, or None with the reason it was dropped."""
     label = obj['label']['id']
     if label in mapping:
@@ -38,6 +38,11 @@ def arm_label(obj, verification, mapping, policy):
         return None, 'parent_fallback_dropped'
     if policy == 'modal':
         return mapping['car'], None
+    if policy == 'retrieval':
+        label = (retrieved or {}).get('label')
+        if label in mapping:
+            return mapping[label], None
+        return None, 'parent_fallback_unresolved_by_retrieval'
     verifier = (verification or {}).get('verifier_label')
     if verifier in mapping:
         return mapping[verifier], None
@@ -56,6 +61,12 @@ def build(runs, arm, protocol, out):
     for run in sorted(p for p in runs.iterdir() if p.is_dir()):
         annotation = json.loads((run / 'annotation.json').read_text())
         width, height = annotation['image']['normalized_size']
+        retrieval = {}
+        sidecar = run / 'evidence/retrieval.json'
+        if arm['policy'] == 'retrieval':
+            if not sidecar.is_file():
+                raise SystemExit(f'{run.name} has no retrieval sidecar; run retrieval_labels.py first')
+            retrieval = json.loads(sidecar.read_text())['labels']
         verifications = {}
         for line in (run / 'evidence/candidates.jsonl').read_text().splitlines():
             record = json.loads(line)
@@ -71,7 +82,8 @@ def build(runs, arm, protocol, out):
                 if verification['verifier_score'] < arm['verify_threshold']:
                     stats['dropped']['below_threshold'] = stats['dropped'].get('below_threshold', 0) + 1
                     continue
-            index, reason = arm_label(obj, verification, mapping, arm['policy'])
+            index, reason = arm_label(obj, verification, mapping, arm['policy'],
+                                      retrieval.get(obj['id']))
             if index is None:
                 stats['dropped'][reason] = stats['dropped'].get(reason, 0) + 1
                 continue

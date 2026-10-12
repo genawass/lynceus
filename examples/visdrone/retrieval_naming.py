@@ -105,6 +105,10 @@ def main():
     parser.add_argument('--neighbours', type=int, default=5)
     parser.add_argument('--match-iou', type=float, default=0.5)
     parser.add_argument('--device', default='cuda')
+    parser.add_argument('--consumer-mapping',
+                        default=str(Path(__file__).parent / 'student-protocol.json'),
+                        help='a schema to also score agreement under, since a label wrong against '
+                             'the ontology can be harmless to a consumer whose classes are coarser')
     parser.add_argument('--out')
     args = parser.parse_args()
 
@@ -122,7 +126,31 @@ def main():
     print(f'bank: {len(bank_labels)} crops from {len(bank_images)} training images, {bank_counts}',
           flush=True)
 
+    consumer = {}
+    if args.consumer_mapping:
+        protocol = json.loads(Path(args.consumer_mapping).read_text())
+        consumer = protocol['class_mapping']['ontology_to_dataset']
+
+    def under_consumer(label, reference):
+        """Agreement in the schema a consumer receives, where a finer error can vanish.
+
+        A label wrong against the ontology is not necessarily wrong to a consumer: this dataset's
+        own three classes merge car with van and truck with bus, and leave bicycle, motor and
+        tricycle unlabelled entirely. So `car` read as `van` costs that consumer nothing, and two
+        classes it drops agree by both being absent. This is not a softer score, it is a different
+        question -- what the consumer receives rather than what the ontology distinguishes -- and
+        the two are reported side by side because neither subsumes the other.
+        """
+        truth = consumer.get(reference['permitted_labels'][0])
+        given = consumer.get(label) if label else None
+        if truth is None and given is None:
+            return 'both_outside_schema'
+        if truth == given:
+            return 'agrees'
+        return 'absent_from_export' if given is None else 'wrong'
+
     tally = {'lynceus': Counter(), 'verifier': Counter(), 'retrieval': Counter()}
+    consumer_tally = {'lynceus': Counter(), 'verifier': Counter(), 'retrieval': Counter()}
     fallback = {'lynceus': Counter(), 'verifier': Counter(), 'retrieval': Counter()}
     confusions = Counter()
     rows = 0
@@ -160,6 +188,8 @@ def main():
                 # The population that matters is the one conservative naming declined to resolve.
                 if emitted == 'vehicle':
                     fallback[name][outcome] += 1
+                    if consumer:
+                        consumer_tally[name][under_consumer(label, reference)] += 1
             if emitted == 'vehicle':
                 confusions[(reference['permitted_labels'][0], neighbour['label'])] += 1
 
@@ -174,10 +204,13 @@ def main():
               'all_matched': {name: share(counter) for name, counter in tally.items()},
               'parent_fallback_only': {name: share(counter) for name, counter in fallback.items()},
               'fallback_boxes': sum(fallback['lynceus'].values()),
+              'parent_fallback_under_consumer_schema': {name: share(counter)
+                                                        for name, counter in consumer_tally.items()},
               'retrieval_confusions_on_fallback': {f'{a}->{b}': n for (a, b), n
                                                    in confusions.most_common(12)}}
     print(f'\n{rows} matched boxes; {report["fallback_boxes"]} of them named `vehicle` by the pipeline')
-    for population in ('all_matched', 'parent_fallback_only'):
+    for population in ('all_matched', 'parent_fallback_only',
+                       'parent_fallback_under_consumer_schema'):
         print(f'\n{population}')
         for name in ('lynceus', 'verifier', 'retrieval'):
             print(f'  {name:>10}: {report[population][name]}')
